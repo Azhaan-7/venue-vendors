@@ -1,0 +1,38 @@
+import "reflect-metadata";
+import { DataSource } from "typeorm";
+import { User } from "./entity/User";
+import { Profile } from "./entity/Profile";
+import { Venue } from "./entity/Venue";
+import { VenueSuitability } from "./entity/VenueSuitability";
+import { Application } from "./entity/Application";
+import { ApplicationVenue } from "./entity/ApplicationVenue";
+import { UploadedDocument } from "./entity/UploadedDocument";
+import { BlockedPeriod } from "./entity/BlockedPeriod";
+import { Comment } from "./entity/Comment";
+import { Review } from "./entity/Review";
+import { HireHistory } from "./entity/HireHistory";
+import { HirerDocument } from "./entity/HirerDocument";
+import { ApplicationDraft } from "./entity/ApplicationDraft";
+import { application } from "express";
+import { ApplicationDraftVenue } from "./entity/ApplicationDraftVenue";
+import "dotenv/config";
+
+export const AppDataSource = new DataSource({
+  type: "mssql",
+  host: process.env.DB_HOST,
+  username: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME,
+  options: {
+    encrypt: false, // Use this for Azure SQL Database
+    //trustedConnection: false // Use this for Windows Authentication (if applicable)
+  },
+  // synchronize: true will automatically create database tables based on entity definitions
+  // and update them when entity definitions change. This is useful during development
+  // but should be disabled in production to prevent accidental data loss.
+  synchronize: true,
+  logging: true, // Enable logging for debugging purposes
+  entities: [User, Profile, Venue, VenueSuitability, Application, ApplicationVenue, UploadedDocument, BlockedPeriod, Comment, Review, HireHistory, HirerDocument, ApplicationDraft, ApplicationDraftVenue],
+  migrations: [],
+  subscribers: [],
+});
