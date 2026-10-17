@@ -1,3 +1,4 @@
+import { HttpError } from "../utils/HttpError";
 import { Request, Response } from "express";
 import { AppDataSource } from "../data-source";
 import { Application } from "../entity/Application";
@@ -6,116 +7,127 @@ import { Venue } from "../entity/Venue";
 import { ApplicationStatus } from "../entity/ApplicationStatus";
 import { Comment } from "../entity/Comment";
 import { ApplicationVenue } from "../entity/ApplicationVenue";
+import { eventInputError, pagination, positiveId } from "../security/input";
+import { vendorOwnsApplication } from "../auth/authorization";
 
 export class ApplicationController {
     private applicationRepository = AppDataSource.getRepository(Application);
     private userRepository = AppDataSource.getRepository(User);
-    private venueRepository = AppDataSource.getRepository(Venue);
-    private applicationVenueRepository = AppDataSource.getRepository(ApplicationVenue);
 
     async createApplication(request: Request, response: Response) {
+        const { event, venues } = request.body;
+        const validationError = eventInputError(event, venues);
+        if (validationError) return response.status(400).json({ message: validationError });
         try {
-            const { event, venues, hirerID } = request.body;
+            const result = await AppDataSource.transaction(async manager => {
+                const applicationRepository = manager.getRepository(Application);
+                const userRepository = manager.getRepository(User);
+                const venueRepository = manager.getRepository(Venue);
+                const applicationVenueRepository = manager.getRepository(ApplicationVenue);
 
-            if (!event) {
-                return response.status(400).json({ message: "Event details not found" });
-            }
-
-            const eventName = String(event.eventName || "").trim();
-            const guests = Number(event.guests);
-            const eventDate = String(event.date || "").trim();
-            const eventTime = String(event.time || "").trim();
-            const duration = Number(event.duration);
-
-            if (!eventName) {
-                return response.status(400).json({ message: "Event name is required" });
-            }
-
-            if (!eventDate) {
-                return response.status(400).json({ message: "Event date is required" });
-            }
-
-            if (!eventTime) {
-                return response.status(400).json({ message: "Event time is required" });
-            }
-
-            if (!guests || guests <= 0) {
-                return response.status(400).json({ message: "Number of guests must be greater than 0" });
-            }
-
-            if (!duration || duration <= 0) {
-                return response.status(400).json({ message: "Duration must be greater than 0" });
-            }
-
-            if (!Array.isArray(venues) || venues.length === 0) {
-                return response.status(400).json({ message: "At least one venue must be selected" });
-            }
-
-            const hirerId = Number(hirerID);
-
-            if (isNaN(hirerId)) {
-                return response.status(400).json({ message: "Invalid hirer ID" });
-            }
-
-            const hirer = await this.userRepository.findOne({
-                where: { id: hirerId },
-            });
-
-            if (!hirer) {
-                return response.status(404).json({ message: "Hirer not found" });
-            }
-
-            const selectedVenues = [];
-
-            for (let i = 0; i < venues.length; i++) {
-                const venueId = Number(venues[i]);
-
-                if (isNaN(venueId)) {
-                    return response.status(400).json({ message: "Invalid venue ID" });
+                if (!event) {
+                    throw new HttpError(400, "Event details not found");
                 }
 
-                const venue = await this.venueRepository.findOne({
-                    where: { id: venueId },
+                const eventName = String(event.eventName || "").trim();
+                const guests = Number(event.guests);
+                const eventDate = String(event.date || "").trim();
+                const eventTime = String(event.time || "").trim();
+                const duration = Number(event.duration);
+
+                if (!eventName) {
+                    throw new HttpError(400, "Event name is required");
+                }
+
+                if (!eventDate) {
+                    throw new HttpError(400, "Event date is required");
+                }
+
+                if (!eventTime) {
+                    throw new HttpError(400, "Event time is required");
+                }
+
+                if (!guests || guests <= 0) {
+                    throw new HttpError(400, "Number of guests must be greater than 0");
+                }
+
+                if (!duration || duration <= 0) {
+                    throw new HttpError(400, "Duration must be greater than 0");
+                }
+
+                if (!Array.isArray(venues) || venues.length === 0) {
+                    throw new HttpError(400, "At least one venue must be selected");
+                }
+
+                const hirerId = request.authUser!.id;
+
+                const hirer = await userRepository.findOne({
+                    where: { id: hirerId },
                 });
 
-                if (!venue) {
-                    return response.status(404).json({ message: "Selected venue not found" });
+                if (!hirer) {
+                    throw new HttpError(404, "Hirer not found");
                 }
 
-                if (guests > venue.capacity) {
-                    return response.status(400).json({
-                        message: `Guest count exceeds capacity for ${venue.name}`,
+                const selectedVenues = [];
+
+                for (let i = 0; i < venues.length; i++) {
+                    const venueId = Number(venues[i]);
+
+                    if (isNaN(venueId)) {
+                        throw new HttpError(400, "Invalid venue ID");
+                    }
+
+                    const venue = await venueRepository.findOne({
+                        where: { id: venueId },
                     });
+
+                    if (!venue) {
+                        throw new HttpError(404, "Selected venue not found");
+                    }
+
+                    if (guests > venue.capacity) {
+                        throw new HttpError(400, `Guest count exceeds capacity for ${venue.name}`);
+                    }
+
+                    selectedVenues.push(venue);
                 }
 
-                selectedVenues.push(venue);
-            }
-  
 
-            const application = this.applicationRepository.create({
-                hirer,
-                eventName,
-                guest: guests,
-                eventDate,
-                eventTime,
-                durationHours: duration,
-            });
-
-            const savedApplication = await this.applicationRepository.save(application);
-
-            for (let i = 0; i < selectedVenues.length; i++) {
-                const applicationVenue = this.applicationVenueRepository.create({
-                    application: savedApplication,
-                    venue: selectedVenues[i],
-                    rankOrder: i + 1,
+                const application = applicationRepository.create({
+                    hirer,
+                    eventName,
+                    guest: guests,
+                    eventDate,
+                    eventTime,
+                    durationHours: duration,
                 });
 
-                await this.applicationVenueRepository.save(applicationVenue);
-            }
+                const savedApplication = await applicationRepository.save(application);
 
-            return response.status(201).json(savedApplication);
+                for (let i = 0; i < selectedVenues.length; i++) {
+                    const applicationVenue = applicationVenueRepository.create({
+                        application: savedApplication,
+                        venue: selectedVenues[i],
+                        rankOrder: i + 1,
+                    });
+
+                    await applicationVenueRepository.save(applicationVenue);
+                }
+
+                return {
+                    id: savedApplication.id,
+                    event: { eventName, guests, date: eventDate, time: eventTime, duration },
+                    venues: selectedVenues.map(venue => venue.id),
+                    dateApplied: savedApplication.dateApplied,
+                    hirerID: hirer.id,
+                    status: savedApplication.status,
+                };
+            });
+            return response.status(201).json(result);
         } catch (error) {
-            console.error(error);
+            if (error instanceof HttpError) return response.status(error.status).json({ message: error.message });
+            console.error("Database operation failed; details suppressed");
             return response.status(500).json({ message: "Failed to create application" });
         }
     }
@@ -127,6 +139,7 @@ export class ApplicationController {
                 return response.status(400).json({ message: "Invalid hirer ID" });
             }
             const applications = await this.applicationRepository.find({
+                ...pagination(request),
                 where: {
                     hirer: {
                         id: hirerId,
@@ -160,13 +173,13 @@ export class ApplicationController {
 
             return response.json(formattedApplications);
         } catch (error) {
-            console.error(error);
+            console.error("Database operation failed; details suppressed");
             return response.status(500).json({ message: "Failed to fetch applications" });
         }
     }
 
     async getAll(request: Request, response: Response) {
-        const applications = await this.applicationRepository.find({ relations: ["hirer", "hirer.profile", "applicationVenues", "applicationVenues.venue", "comments", "approvedVenue"] });
+        const applications = await this.applicationRepository.find({ ...pagination(request), relations: ["hirer", "hirer.profile", "applicationVenues", "applicationVenues.venue", "comments", "approvedVenue"] });
         const formatApplication = applications.map(app => ({
             id: app.id,
             event: {
@@ -180,7 +193,7 @@ export class ApplicationController {
                 .sort((a, b) => a.rankOrder - b.rankOrder)
                 .map(av => av.venue.id),
             dateApplied: app.dateApplied,
-            hirerID: String(app.hirer.id),
+            hirerID: app.hirer.id,
             hirerEmail: app.hirer.email,
             status: app.status,
             approvedVenueID: app.approvedVenue?.id,
@@ -191,59 +204,114 @@ export class ApplicationController {
     }
 
     async approveApplication(request: Request, response: Response) {
+        if (!positiveId(request.params.id) || (request.body.commentText !== undefined &&
+            (typeof request.body.commentText !== "string" || request.body.commentText.length > 2000))) {
+            return response.status(400).json({ message: "Invalid application ID or comment (maximum 2000 characters)" });
+        }
+        if (!positiveId(request.body.venueId)) return response.status(400).json({ message: "Invalid venue ID" });
         try {
-            const applicationRepository = AppDataSource.getRepository(Application);
-            const venueRepository = AppDataSource.getRepository(Venue);
-            const commentRepository = AppDataSource.getRepository(Comment);
-            const userRepository = AppDataSource.getRepository(User);
-            const application = await applicationRepository.findOne({ where: { id: Number(request.params.id) } });
-            if (!application) {
-                return response.status(404).json({ message: "Application not found" });
-            }
-            const venue = await venueRepository.findOne({ where: { id: request.body.venueId } });
-            if (!venue) {
-                return response.status(404).json({ message: "Venue not found" });
-            }
-            application.status = ApplicationStatus.APPROVED;
-            application.decisionDate = new Date();
-            application.approvedVenue = venue;
-            application.rejectReason = null;
-            await applicationRepository.save(application);
-            if (request.body.commentText) {
-                const vendor = await userRepository.findOne({ where: { id: request.body.vendorId } });
-                if (vendor) {
-                    const comment = commentRepository.create({ application, vendor, commentText: request.body.commentText });
-                    await commentRepository.save(comment);
+            const result = await AppDataSource.transaction(async manager => {
+                const applicationRepository = manager.getRepository(Application);
+                const userRepository = manager.getRepository(User);
+                const venueRepository = manager.getRepository(Venue);
+                const applicationVenueRepository = manager.getRepository(ApplicationVenue);
+                const commentRepository = manager.getRepository(Comment);
+                const applicationId = Number(request.params.id);
+                if (!await vendorOwnsApplication(request.authUser!.id, applicationId, manager)) {
+                    throw new HttpError(403, "You cannot manage this application");
                 }
-            }
-            response.json({ application, message: "Application approved successfully" });
+                const application = await applicationRepository.findOne({ where: { id: applicationId } });
+                if (!application) {
+                    throw new HttpError(404, "Application not found");
+                }
+                const rankedVenue = await applicationVenueRepository.findOne({
+                    where: { application: { id: applicationId }, venue: { id: Number(request.body.venueId) } },
+                });
+                if (!rankedVenue) {
+                    throw new HttpError(400, "The approved venue must be ranked on this application");
+                }
+                const venue = await venueRepository.findOne({ where: { id: request.body.venueId }, relations: ["vendor"] });
+                if (!venue) {
+                    throw new HttpError(404, "Venue not found");
+                }
+                if (venue.vendor?.id !== request.authUser!.id) {
+                    throw new HttpError(403, "You can only approve applications for your own venue");
+                }
+                if (application.status !== ApplicationStatus.PENDING) throw new HttpError(409, "Application has already been decided");
+                application.status = ApplicationStatus.APPROVED;
+                application.decisionDate = new Date();
+                application.approvedVenue = venue;
+                application.rejectReason = null;
+                const decision = await applicationRepository.update({ id: applicationId, status: ApplicationStatus.PENDING }, {
+                    status: application.status, decisionDate: application.decisionDate, approvedVenue: venue, rejectReason: null,
+                });
+                if (!decision.affected) throw new HttpError(409, "Application has already been decided");
+                if (request.body.commentText) {
+                    const vendor = await userRepository.findOne({ where: { id: request.authUser!.id } });
+                    if (vendor) {
+                        const comment = commentRepository.create({ application, vendor, commentText: request.body.commentText });
+                        await commentRepository.save(comment);
+                    }
+                }
+                return {
+                    application: { id: application.id, status: application.status, approvedVenueID: venue.id },
+                    message: "Application approved successfully",
+                };
+            });
+            return response.status(200).json(result);
         } catch (error) {
+            if (error instanceof HttpError) return response.status(error.status).json({ message: error.message });
             response.status(500).json({ message: "Failed to approve application" });
         }
     }
 
     async rejectApplication(request: Request, response: Response) {
+        if (!positiveId(request.params.id) || (request.body.commentText !== undefined &&
+            (typeof request.body.commentText !== "string" || request.body.commentText.length > 2000))) {
+            return response.status(400).json({ message: "Invalid application ID or comment (maximum 2000 characters)" });
+        }
         try {
             const applicationRepository = AppDataSource.getRepository(Application);
-            const application = await applicationRepository.findOne({ where: { id: Number(request.params.id) }, });
+            const applicationId = Number(request.params.id);
+            if (!await vendorOwnsApplication(request.authUser!.id, applicationId)) {
+                return response.status(403).json({ message: "You cannot manage this application" });
+            }
+            const application = await applicationRepository.findOne({ where: { id: applicationId }, });
             if (!application) {
                 return response.status(404).json({ message: "Application not found" });
             }
+            if (application.status !== ApplicationStatus.PENDING) return response.status(409).json({ message: "Application has already been decided" });
             application.status = ApplicationStatus.REJECTED;
             application.decisionDate = new Date();
             application.approvedVenue = null;
             application.rejectReason = request.body.commentText || "Application has been rejected";
-            await applicationRepository.save(application);
-            response.json({ application, message: "Application rejected successfully" });
+            const decision = await applicationRepository.update({ id: applicationId, status: ApplicationStatus.PENDING }, {
+                status: application.status, decisionDate: application.decisionDate, approvedVenue: null, rejectReason: application.rejectReason,
+            });
+            if (!decision.affected) return response.status(409).json({ message: "Application has already been decided" });
+            response.json({
+                application: { id: application.id, status: application.status, rejectReason: application.rejectReason },
+                message: "Application rejected successfully",
+            });
         } catch (error) {
             response.status(500).json({ message: "Failed to reject application" });
         }
     }
 
     async updateComment(request: Request, response: Response) {
+        if (!positiveId(request.params.id) || (request.body.commentText !== undefined &&
+            (typeof request.body.commentText !== "string" || request.body.commentText.length > 2000))) {
+            return response.status(400).json({ message: "Invalid application ID or comment (maximum 2000 characters)" });
+        }
+        if (typeof request.body.commentText !== "string") return response.status(400).json({ message: "Comment is required" });
         try {
             const applicationId = Number(request.params.id);
-            const { vendorId, commentText } = request.body;
+            const { commentText } = request.body;
+            const vendorId = request.authUser!.id;
+
+            if (!await vendorOwnsApplication(vendorId, applicationId)) {
+                return response.status(403).json({ message: "You cannot manage this application" });
+            }
 
             const commentRepository = AppDataSource.getRepository(Comment);
             let comment = await commentRepository.findOne({
@@ -272,7 +340,7 @@ export class ApplicationController {
             await commentRepository.save(comment);
             return response.json({ message: "comment saved successfully" });
         } catch (error) {
-            console.error(error);
+            console.error("Database operation failed; details suppressed");
             return response.status(500).json({ message: "Failed to save comment" });
         }
     }
@@ -281,17 +349,28 @@ export class ApplicationController {
         try {
             const vendorId = Number(request.params.vendorId);
 
-            const applications = await this.applicationRepository.find({
-                relations: [
-                    "hirer",
-                    "hirer.profile",
-                    "applicationVenues",
-                    "applicationVenues.venue",
-                    "applicationVenues.venue.vendor",
-                    "comments",
-                    "approvedVenue"
-                ]
-            });
+            const eligibleApplications = this.applicationRepository.createQueryBuilder("eligible")
+                .select("eligible.id")
+                .innerJoin("eligible.applicationVenues", "preference")
+                .innerJoin("preference.venue", "ownedVenue")
+                .where("ownedVenue.vendor = :vendorId", { vendorId });
+            const applications = await this.applicationRepository.createQueryBuilder("application")
+                .where(`application.id IN (${eligibleApplications.getQuery()})`)
+                .setParameters(eligibleApplications.getParameters())
+                .setFindOptions({
+                    ...pagination(request),
+                    relations: [
+                        "hirer",
+                        "hirer.profile",
+                        "applicationVenues",
+                        "applicationVenues.venue",
+                        "applicationVenues.venue.vendor",
+                        "comments",
+                        "comments.vendor",
+                        "approvedVenue",
+                        "approvedVenue.vendor"
+                    ]
+                }).getMany();
 
             const vendorApplications = applications.filter(app =>
                 app.applicationVenues.some(
@@ -313,14 +392,14 @@ export class ApplicationController {
                     .map(av => av.venue.id),
 
                 dateApplied: app.dateApplied,
-                hirerID: String(app.hirer.id),
+                hirerID: app.hirer.id,
                 hirerEmail: app.hirer.email,
                 status: app.status,
                 approvedVenueID: app.approvedVenue?.id,
 
                 comment:
                     app.comments.length > 0
-                        ? app.comments[app.comments.length - 1].commentText
+                        ? app.comments.filter(comment => comment.vendor?.id === vendorId).slice(-1)[0]?.commentText || ""
                         : "",
 
                 reputationScore:
@@ -330,7 +409,7 @@ export class ApplicationController {
             return response.json(formattedApplications);
 
         } catch (error) {
-            console.error(error);
+            console.error("Database operation failed; details suppressed");
             return response.status(500).json({
                 message: "Failed to load applications"
             });
@@ -341,18 +420,24 @@ export class ApplicationController {
         try {
             const VendorId = Number(req.params.vendorId);
             const period = req.query.period as string;
+            if (period && !["all", "week", "month", "lastMonth"].includes(period)) return res.status(400).json({ message: "Invalid reporting period" });
 
             const applications = await this.applicationRepository.find({
+                take: 5001,
+                order: { id: "ASC" },
+                where: { applicationVenues: { venue: { vendor: { id: VendorId } } } },
                 relations: [
                     "hirer",
                     "hirer.profile",
                     "applicationVenues",
                     "applicationVenues.venue",
                     "applicationVenues.venue.vendor",
-                    "approvedVenue"
+                    "approvedVenue",
+                    "approvedVenue.vendor"
                 ]
             });
 
+            if (applications.length > 5000) return res.status(422).json({ message: "Report exceeds 5000 applications; database aggregation is required" });
             let vendorApplications = applications.filter(app =>
                 app.applicationVenues.some(
                     av => av.venue.vendor?.id === VendorId
@@ -402,7 +487,7 @@ export class ApplicationController {
             }
 
             // Charts 1 & 2 - approved apps filtered by decisionDate
-            const approvedApp = filteredByDecision.filter(app => app.status === ApplicationStatus.APPROVED);
+            const approvedApp = filteredByDecision.filter(app => app.status === ApplicationStatus.APPROVED && app.approvedVenue?.vendor?.id === VendorId);
 
             // chart 1
             const venueTallies: Record<string, Record<string, number>> = {};
@@ -471,7 +556,7 @@ export class ApplicationController {
             return res.json({ venueTallies, combinedTallies, hirerActivity, mostActive, leastActive, venueUtilization });
 
         } catch (error) {
-            console.error(error);
+            console.error("Database operation failed; details suppressed");
             return res.status(500).json({
                 message: "Failed to load stats"
             });

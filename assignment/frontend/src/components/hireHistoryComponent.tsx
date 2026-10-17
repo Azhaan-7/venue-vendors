@@ -7,7 +7,7 @@ type Props = {
 
 export function HirerHistory({ history }: Props) {
   return (
-    <Box p={6} borderWidth="1px" borderRadius="lg">
+    <Box p={{ base: 4, md: 6 }} borderWidth="1px" borderRadius="lg" bg="white">
       <Heading size="md" mb={4}>Your Hiring History</Heading>
 
       <VStack spacing={4} align="stretch">

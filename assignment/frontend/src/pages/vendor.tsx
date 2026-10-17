@@ -1,6 +1,7 @@
+import { requestError } from "@/utils/requestError";
 import {
   Box, Heading, VStack, Text, Button, HStack, Badge, Divider, Alert, AlertIcon, useDisclosure, Table,
-  Thead, Tbody, Tfoot, Tr, Th, Td, TableContainer, FormControl, FormLabel, Select, FormErrorMessage, Input, Textarea} from "@chakra-ui/react";
+  Thead, Tbody, Tfoot, Tr, Th, Td, TableContainer, FormControl, FormLabel, Select, FormErrorMessage, Input, Textarea, Spinner} from "@chakra-ui/react";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import { useAuth } from "@/context/AuthContext";
@@ -16,7 +17,6 @@ import { api, hirerDocumentApi } from "@/services/api";
 import VendorApplicationModal from "@/components/VendorApplicationModal";
 import { Chart as ChartJs, CategoryScale, LinearScale, BarElement, PointElement, LineElement, ArcElement,  Tooltip, Legend } from "chart.js";
 import { Bar, Line, Pie } from "react-chartjs-2";
-import { AnyARecord } from "dns";
 
 //Register ChartJS components
 ChartJs.register(CategoryScale, LinearScale, BarElement, PointElement, LineElement, ArcElement, Tooltip, Legend);
@@ -41,7 +41,7 @@ type DashboardStats = {
 };
 
 export default function Vendor() {
-  const { user } = useAuth();
+  const { user, isLoading } = useAuth();
   const router = useRouter();
   const [applications, setApplications] = useState<EventApplication[]>([]);
   //stores the application that the vendor selects. stays null until the application is selected and gets set when the application is selected
@@ -69,6 +69,7 @@ export default function Vendor() {
   const [blockEndDate, setBlockEndDate] = useState("");
   const [blockReason, setBlockReason] = useState("");
   const [blockMessage, setBlockMessage] = useState("");
+  const [blockError, setBlockError] = useState(false);
   const [blockErrors, setBlockErrors] = useState<{ [key: string]: string }>({});
   //sorting the application
   const [sortBy, setSortBy] = useState<"default" | "reputation">("default");
@@ -90,22 +91,31 @@ export default function Vendor() {
   const [period, setPeriod] = useState<"all" | "week" | "month" | "lastMonth">("all");
   const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
 
+  const [loadErrors, setLoadErrors] = useState<Record<string, string>>({});
+  const [applicationsLoading, setApplicationsLoading] = useState(true);
+
+  const refreshError = (error: unknown, resource: string) => {
+    setLoadErrors(previous => ({ ...previous, [resource]: `Changes saved, but ${resource} could not refresh. ${requestError(error, "Please reload the page.")}` }));
+  };
+
   //redirecting page
   useEffect(() => {
+    if (isLoading) return;
     if (!user) {
       router.push("/signin");
     } else if (user.role !== "vendor") {
       router.push("/");
     }
-  }, [user, router]);
+  }, [user, isLoading, router]);
 
   useEffect(() => {
     const loadProfiles = async () => {
+      if (!selectedApplication) return;
       try {
         const profileMap: { [key: number]: Profile } = {};
-        for (const app of applications) {
-          const profileResponse = await api.get(`/profile/${app.hirerID}`);
-          const documents = await hirerDocumentApi.getDocuments(app.hirerID);
+        for (const hirerId of [selectedApplication.hirerID]) {
+          const profileResponse = await api.get(`/profile/${hirerId}`);
+          const documents = await hirerDocumentApi.getDocuments(hirerId);
           const profileData = profileResponse.data;
           const fullProfile: Profile = {
             ...profileData,
@@ -113,47 +123,48 @@ export default function Vendor() {
               profileData.credibilityScore ??
               profileData.creditabilityScore ??
               0),};
-          documents.forEach((doc: any) => {
+          documents.forEach((doc) => {
             const uploadedFile = {
               name: doc.fileName,
               type: doc.mimeType,
               size: 0,
-              data: doc.fileData,
+              data: doc.downloadUrl,
             };
             if (doc.documentType === "driverLicense") {
-              fullProfile.driverLicense = uploadedFile as any;
+              fullProfile.driverLicense = uploadedFile;
             }
             if (doc.documentType === "publicLiabilityInsurance") {
-              fullProfile.publicLiabilityInsurance = uploadedFile as any;
+              fullProfile.publicLiabilityInsurance = uploadedFile;
             }
             if (doc.documentType === "businessRegistration") {
-              fullProfile.businessRegistration = uploadedFile as any;
+              fullProfile.businessRegistration = uploadedFile;
             }
           });
-          profileMap[app.hirerID] = fullProfile;
+          profileMap[hirerId] = fullProfile;
         }
-        setProfiles(profileMap);
+        setProfiles(previous => ({ ...previous, ...profileMap }));
       } catch (error) {
-        console.error("Error loading profiles:", error);
+        setLoadErrors(previous => ({ ...previous, "profiles": requestError(error, "Could not load the applicant profile and documents.") }));
       }
     };
-    if (applications.length > 0) {
-      loadProfiles();
-    }
-  }, [applications]);
+    void loadProfiles();
+  }, [selectedApplication]);
 
   useEffect(() => {
-    const loadApplications = async () => {;
+    const loadApplications = async () => {
+      if (!user) return;
+      setApplicationsLoading(true);
       try {
-        if (!user) return
         const data = await vendorApi.getApplications(user.id);
         setApplications(data);
       } catch (error) {
-        console.error("Error loading applications:", error);
+        setLoadErrors(previous => ({ ...previous, "applications": requestError(error, "Could not load applications.") }));
+      } finally {
+        setApplicationsLoading(false);
       }
     };
     loadApplications();
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     const loadBlockedPeriods = async () => {
@@ -161,11 +172,11 @@ export default function Vendor() {
         const data = await vendorApi.getBlockedPeriods();
         setBlockedPeriods(data);
       } catch (error) {
-        console.error("Error loading blocked periods:", error);
+        setLoadErrors(previous => ({ ...previous, "blocked periods": requestError(error, "Could not load blocked periods.") }));
       }
     };
     loadBlockedPeriods();
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     const loadHireHistory = async () => {
@@ -173,11 +184,11 @@ export default function Vendor() {
         const data = await vendorApi.getHireHistory();
         setHireHistory(data);
       } catch (error) {
-        console.error("Error loading hire history:", error);
+        setLoadErrors(previous => ({ ...previous, "hire history": requestError(error, "Could not load hire history.") }));
       }
     };
     loadHireHistory();
-  }, []);
+  }, [user]);
   //loading venue from backend
   useEffect(() => {
     const loadVenue = async() => {
@@ -186,11 +197,11 @@ export default function Vendor() {
         const venues = await vendorApi.getMyVenues(user.id);
         setVenues(venues);
       } catch (error) {
-        console.error("Error loading venues:", error);
+        setLoadErrors(previous => ({ ...previous, "venues": requestError(error, "Could not load venues.") }));
       }
     };
     loadVenue();
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     if (!user) return;
@@ -199,11 +210,11 @@ export default function Vendor() {
             await vendorApi.getVendorStats(user.id, period);
         setDashboardStats(data);
     };
-    loadStats();
+    void loadStats().catch(error => setLoadErrors(previous => ({ ...previous, statistics: requestError(error, "Could not load dashboard statistics.") })));
 }, [user, period]);
 
   const getHirerProfile = (hirerId: number): Profile => {
-    return (profiles[hirerId] || {name: "Unknown", phone: "Unknown", isBusiness: false, abn: "", credibilityScore: 0});
+    return (profiles[hirerId] || {name: "Unknown", phoneNumber: "Unknown", isBusiness: false, abn: "", credibilityScore: 0});
   };
 
   const getHirerEmail = (hirerId: number): string => {
@@ -320,9 +331,11 @@ export default function Vendor() {
       setModalMessage("No changes made — comment was empty.");
       return;
     }
+    setErrorMessage("");
+    setModalMessage("");
     try {
       await vendorApi.updateComment(selectedApplication.id, user.id, comment);
-      const updatedApplications: EventApplication[] = await vendorApi.getApplications(user.id);
+      const updatedApplications = await vendorApi.getApplications(user.id).catch(error => { refreshError(error, "applications"); return applications; });
       setApplications(updatedApplications);
       const updatedSelected = updatedApplications.find((app) => app.id === selectedApplication.id);
       if (updatedSelected) {
@@ -330,9 +343,8 @@ export default function Vendor() {
       }
       setModalMessage("Comment saved successfully");
       setEditComment(false);
-    } catch(error) {
-      console.error(error);
-      setModalMessage("Failed to save comment.")
+    } catch (error) {
+      setErrorMessage(requestError(error, "Failed to save comment."));
     }
   };
 
@@ -352,8 +364,10 @@ export default function Vendor() {
   };
   
   const handleBlockedVenue = async () => {
+    setBlockError(false);
     if (!validateBlockForm()) return;
     if (!user?.id) {
+      setBlockError(true);
       setBlockMessage("Unable to identify vendor.");
       return;
     }
@@ -361,6 +375,7 @@ export default function Vendor() {
     try {
       const venue = venues.find(v => v.name === blockVenueName);
       if (!venue) {
+        setBlockError(true);
         setBlockMessage("Selected venue not found.");
         return;
       }
@@ -371,7 +386,7 @@ export default function Vendor() {
         endDate: blockEndDate,
         reason: blockReason
       });
-      const updatedBlockedPeriod = await vendorApi.getBlockedPeriods();
+      const updatedBlockedPeriod = await vendorApi.getBlockedPeriods().catch(error => { refreshError(error, "blocked periods"); return blockedPeriods; });
       setBlockedPeriods(updatedBlockedPeriod);
       setBlockVenueName("");
       setBlockStartDate("");
@@ -380,20 +395,21 @@ export default function Vendor() {
       setBlockErrors({});
       setBlockMessage(`${blockVenueName} has been blocked successfully from ${blockStartDate} to ${blockEndDate}.`);
     } catch (error) {
-      console.error("Error blocking venue:", error);
-      setBlockMessage("blocking venue failed");
+      setBlockError(true);
+      setBlockMessage(requestError(error, "Could not block the venue."));
     }
   };
 
   const handleRemoveBlock = async (id: number) => {
+    setBlockError(false);
     try {
       await vendorApi.removeBlockedPeriod(id);
-      const updatedBlockedPeriod = await vendorApi.getBlockedPeriods();
+      const updatedBlockedPeriod = await vendorApi.getBlockedPeriods().catch(error => { refreshError(error, "blocked periods"); return blockedPeriods; });
       setBlockedPeriods(updatedBlockedPeriod);
       setBlockMessage("Blocked period removed successfully.");
     } catch (error) {
-      console.error("Error removing blocked period:", error);
-      setBlockMessage("Failed to remove blocked period.");
+      setBlockError(true);
+      setBlockMessage(requestError(error, "Failed to remove blocked period."));
     }
   };
 
@@ -403,19 +419,18 @@ export default function Vendor() {
     if (!user) return;
     //vendor must select a venue 
     if(!selectedVenueId) {
-      setErrorMessage("Select a venue to approve!!!");
+      setErrorMessage("Select a venue to approve.");
       return;
     }
     try {
       await vendorApi.approveApplication(selectedApplication.id, comment, selectedVenueId, user.id);
-      const updatedApplication = await vendorApi.getApplications(user.id);
+      const updatedApplication = await vendorApi.getApplications(user.id).catch(error => { refreshError(error, "applications"); return applications; });
       setApplications(updatedApplication);
-      setPageMessage("Booking confirmed!!");
+      setPageMessage("Booking confirmed.");
       setTimeout(() => setPageMessage(""), 3000);
       onClose();
     } catch (error) {
-      console.error("Error approving application:", error);
-      setErrorMessage("Failed to approve application. Please try again.");
+      setErrorMessage(requestError(error, "Failed to approve application. Please try again."));
     }
   };
 
@@ -425,14 +440,13 @@ export default function Vendor() {
     try {
       await vendorApi.rejectApplication(selectedApplication.id, comment);
       if (!user) return
-      const updatedApplication = await vendorApi.getApplications(user.id);
+      const updatedApplication = await vendorApi.getApplications(user.id).catch(error => { refreshError(error, "applications"); return applications; });
       setApplications(updatedApplication);
       setPageMessage("Application rejected!");
       setTimeout(() => setPageMessage(""), 3000);
       onClose();
     } catch (error) {
-      console.error("Error rejecting application:", error);
-      setErrorMessage("Failed to reject application. Please try again.");
+      setErrorMessage(requestError(error, "Failed to reject application. Please try again."));
     }
   };
 
@@ -475,8 +489,8 @@ export default function Vendor() {
         return;
       }
     try {
-      await vendorApi.createVenue({vendorId: user.id, name: venueName, location, capacity, price, description, image, suitabilities: suitabilityText.split(",").map(s => s.trim()).filter(Boolean)});
-      const updated = await vendorApi.getMyVenues(user.id);
+      await vendorApi.createVenue({name: venueName, location, capacity, price, description, image, suitabilities: suitabilityText.split(",").map(s => s.trim()).filter(Boolean)});
+      const updated = await vendorApi.getMyVenues(user.id).catch(error => { refreshError(error, "venues"); return venues; });
       setVenues(updated);
       setVenueName("");
       setLocation("");
@@ -486,7 +500,7 @@ export default function Vendor() {
       setImage("");
       setSuitabilityText("");
     } catch (error) {
-      console.error("Failed to create venue", error);
+      alert(requestError(error, "Could not create the venue."));
     }
   };
 
@@ -522,8 +536,8 @@ export default function Vendor() {
         return;
       }
     try {
-      await vendorApi.updateVenue(editingVenue.id, {vendorId: user.id, name: venueName, location, capacity, price, description, image, suitabilities: suitabilityText.split(",").map(s => s.trim()).filter(Boolean)});
-      const updated = await vendorApi.getMyVenues(user.id);
+      await vendorApi.updateVenue(editingVenue.id, {name: venueName, location, capacity, price, description, image, suitabilities: suitabilityText.split(",").map(s => s.trim()).filter(Boolean)});
+      const updated = await vendorApi.getMyVenues(user.id).catch(error => { refreshError(error, "venues"); return venues; });
       setVenues(updated);
       setEditingVenue(null);
       setVenueName("");
@@ -534,7 +548,7 @@ export default function Vendor() {
       setImage("");
       setSuitabilityText("");
     } catch (error) {
-      console.error("Failed to update venue", error);
+      alert(requestError(error, "Could not update the venue."));
     }
   };
 
@@ -542,10 +556,10 @@ export default function Vendor() {
     try {
         const result = await vendorApi.deleteVenue(venueId, user!.id);
         alert(result.message);
-        const updated = await vendorApi.getMyVenues(user!.id);
+        const updated = await vendorApi.getMyVenues(user!.id).catch(error => { refreshError(error, "venues"); return venues; });
         setVenues(updated);
-    } catch (error: any) {
-        alert(error.response?.data?.message || "Unable to delete venue.")
+    } catch (error) {
+        alert(requestError(error, "Unable to delete venue."));
     }
   };
 
@@ -562,23 +576,24 @@ export default function Vendor() {
   };
 
   if (!user || user.role !== "vendor") return null;
-  const stats = dashboardStats || {most: null, least: null, notSelected: []};
+
   const uniqueHirers:number[] = Array.from(
     new Set(applications.map(app => app.hirerID))
   );
   return (
     <>
       <Head><title>Vendor Dashboard — Venue Vendors</title></Head>
-      <Box maxW="6xl" mx="auto" px={6} py={8}>
+      <Box maxW="6xl" mx="auto" px={{ base: 4, md: 6 }} py={{ base: 6, md: 8 }}>
         <Heading as="h1" size="xl" mb={1} color="gray.700">Vendor Dashboard</Heading>
-        <Text color="gray.500" mb={6}>Welcome, {user.email}</Text>
+        <Text color="gray.600" mb={6}>Welcome, {user.email}</Text>
         {pageMessage && (
           <Alert status="success" rounded="md" mb={4}>
             <AlertIcon />
             {pageMessage}
           </Alert>
         )}
-        <HStack mb={6} spacing={4}>
+        {Object.entries(loadErrors).map(([key, message]) => <Alert key={key} status="error" borderRadius="md" mb={3}><AlertIcon />{message}</Alert>)}
+        <HStack mb={6} flexWrap="wrap" spacing={0} gap={3} aria-label="Vendor sections">
           <Button
             colorScheme={activeTab === "dashboard" ? "blue" : "gray"}
             variant={activeTab === "dashboard" ? "solid" : "outline"}
@@ -609,7 +624,7 @@ export default function Vendor() {
 
         {activeTab === "dashboard" && (
           <Box>
-            <Select value={period} onChange={(e) => setPeriod(e.target.value as "week" | "month" | "lastMonth" | "all")}
+            <Select aria-label="Dashboard reporting period" value={period} onChange={(e) => setPeriod(e.target.value as "week" | "month" | "lastMonth" | "all")}
               maxW="250px" mb={4}>
               <option value="week">This Week</option>
               <option value="month">This Month</option>
@@ -618,12 +633,12 @@ export default function Vendor() {
             </Select>
             <Heading size="md" mb={6} color="gray.700">Infographic</Heading>
             {applications.length === 0 ? (
-              <Text color="gray.400">No application data available yet.</Text>
+              <Text color="gray.600">No application data available yet.</Text>
             ) : (
               <VStack spacing={6} align="stretch">
                 <Box bg="white" p={6} rounded="xl" maxW="700px">
                   <Heading size="sm" mb={4}>Hirer Tallies per Venue</Heading>
-                  {dashboardStats?.venueTallies && Object.entries(dashboardStats.venueTallies).map(([venueName, hirers]: any) => (
+                  {dashboardStats?.venueTallies && Object.entries(dashboardStats.venueTallies).map(([venueName, hirers]) => (
                     <Box key={venueName} mb={8}>
                       <Text mb={2} fontWeight="bold">{venueName}</Text>
                       <Bar data={{
@@ -675,7 +690,7 @@ export default function Vendor() {
                         const allDates = Array.from(
                           new Set(
                             Object.values(dashboardStats.venueUtilization)
-                              .flatMap((dates: any) => Object.keys(dates))
+                              .flatMap((dates) => Object.keys(dates))
                           )
                         ).sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
 
@@ -688,7 +703,7 @@ export default function Vendor() {
                         ];
 
                         const datasets = Object.entries(dashboardStats.venueUtilization).map(
-                          ([venueName, dates]: any, i) => ({
+                          ([venueName, dates], i) => ({
                             label: venueName,
                             data: allDates.map(date => dates[date] || 0),
                             borderColor: colors[i % colors.length],
@@ -705,7 +720,7 @@ export default function Vendor() {
                           />
                         );
                       })()
-                    : <Text color="gray.400">No utilization data for this period.</Text>
+                    : <Text color="gray.600">No utilization data for this period.</Text>
                   }
                 </Box>
               </VStack>
@@ -715,8 +730,8 @@ export default function Vendor() {
 
         {activeTab === "applicants" && (
           <Box>
-            <HStack mb={4} justify="flex-end" spacing={3}>
-              <Text fontSize="sm" color="gray.500">Sort by:</Text>
+            <HStack mb={4} justify="flex-end" flexWrap="wrap" spacing={0} gap={3}>
+              <Text fontSize="sm" color="gray.600">Sort by:</Text>
               <Button size="sm" colorScheme={sortBy === "default" ? "blue" : "gray"} variant={sortBy === "default" ? "solid" : "outline"}
                 onClick={() => setSortBy("default")}>Default</Button>
               <Button size="sm" colorScheme={sortBy === "reputation" ? "blue" : "gray"}variant={sortBy === "reputation" ? "solid" : "outline"} onClick={() => {setSortBy("reputation"); setDirectionSort("desc");}}>Reputation Score
@@ -728,7 +743,8 @@ export default function Vendor() {
             </HStack>
 
             <VStack spacing={4} align="stretch">
-              {sortApplication.length === 0 && (<Text color="gray.400">No applicants available.</Text>)}
+              {applicationsLoading && <Text as="div" role="status"><Spinner size="sm" mr={2} />Loading applications…</Text>}
+              {!applicationsLoading && !loadErrors.applications && sortApplication.length === 0 && (<Text color="gray.600">No applicants available.</Text>)}
               {sortApplication.map((app, index) => {
                 const profile = getHirerProfile(app.hirerID);
                 const email = app.hirerEmail;
@@ -736,10 +752,10 @@ export default function Vendor() {
                 return (
                   <Box key={index} p={5} bg="white" rounded="xl" shadow="sm" border="1px solid" borderColor="gray.200"
                     cursor="pointer" _hover={{ borderColor: "blue.300", shadow: "md" }} onClick={() => handleSelectApplication(app)} transition="all 0.2s">
-                    <HStack justify="space-between" mb={3}>
+                    <HStack justify="space-between" mb={3} flexWrap="wrap" gap={3}>
                       <VStack align="start" spacing={0}>
                         <Heading size="sm" color="gray.700">{profile.name || app.hirerID}</Heading>
-                        <Text fontSize="sm" color="gray.500">{email}</Text>
+                        <Text fontSize="sm" color="gray.600">{email}</Text>
                       </VStack>
                       <HStack>
                         <Badge colorScheme={getStatusColor(app.status)} px={3} py={1} rounded="full"> {app.status.toUpperCase()}</Badge>
@@ -749,13 +765,13 @@ export default function Vendor() {
 
                     <Divider mb={3} />
 
-                    <HStack spacing={6} flexWrap="wrap">
+                    <HStack spacing={0} gap={6} flexWrap="wrap" align="start">
                       <Box>
-                        <Text fontSize="xs" color="gray.400" fontWeight="bold">EVENT</Text>
+                        <Text fontSize="xs" color="gray.600" fontWeight="bold">EVENT</Text>
                         <Text fontSize="sm">{app.event?.eventName}</Text>
                       </Box>
                       <Box>
-                        <Text fontSize="xs" color="gray.400" fontWeight="bold">VENUE PREFERENCES</Text>
+                        <Text fontSize="xs" color="gray.600" fontWeight="bold">VENUE PREFERENCES</Text>
                         {app.venues.map((venueId, index) => (
                           <Text fontSize="sm" key={venueId}>
                             {index + 1}. {getVenueName(venueId)} — {getVenueLocation(venueId)}
@@ -766,15 +782,15 @@ export default function Vendor() {
                         ))}
                       </Box>
                       <Box>
-                        <Text fontSize="xs" color="gray.400" fontWeight="bold">GUESTS</Text>
+                        <Text fontSize="xs" color="gray.600" fontWeight="bold">GUESTS</Text>
                         <Text fontSize="sm">{app.event?.guests}</Text>
                       </Box>
                       <Box>
-                        <Text fontSize="xs" color="gray.400" fontWeight="bold">DATE & TIME</Text>
+                        <Text fontSize="xs" color="gray.600" fontWeight="bold">DATE & TIME</Text>
                         <Text fontSize="sm">{app.event?.date} at {app.event?.time}</Text>
                       </Box>
                       <Box>
-                        <Text fontSize="xs" color="gray.400" fontWeight="bold">DURATION</Text>
+                        <Text fontSize="xs" color="gray.600" fontWeight="bold">DURATION</Text>
                         <Text fontSize="sm">{app.event?.duration} hours</Text>
                       </Box>
                     </HStack>
@@ -803,15 +819,15 @@ export default function Vendor() {
                 <Box key={hirerID} bg="white" rounded="xl" shadow="sm" border="1px solid" borderColor="gray.200" overflow="hidden">
                   <Box px={4} py={3} bg="gray.50" borderBottom="1px solid" borderColor="gray.200">
                     <Heading size="sm" color="gray.700">{profile.name || hirerID}</Heading>
-                    <Text fontSize="xs" color="gray.500">{email}</Text>
+                    <Text fontSize="xs" color="gray.600">{email}</Text>
                   </Box>
 
                   {history.length === 0 ? (
                     <Box p={4}>
-                      <Text fontSize="sm" color="gray.400">No past hiring history available.</Text>
+                      <Text fontSize="sm" color="gray.600">No past hiring history available.</Text>
                     </Box>
                   ) : (
-                    <TableContainer>
+                    <TableContainer tabIndex={0} role="region" aria-label="Hire history, scroll horizontally">
                       <Table variant="simple" size="sm">
                         <Thead bg="gray.50">
                           <Tr>
@@ -870,21 +886,14 @@ export default function Vendor() {
         {activeTab === "venues" && (
           <Box>
             <Heading size="md" mb={4}>{editingVenue ? "Edit Venue" : "Create Venue"}</Heading>
-            <VStack spacing={3} align="stretch" mb={6}>
-              <Text>Venue Name:</Text>
-              <Input value={venueName} onChange={(e) => setVenueName(e.target.value)}/>
-              <Text>Venue Location:</Text>
-              <Input value={location} onChange={(e) => setLocation(e.target.value)}/>
-              <Text>Capacity:</Text>
-              <Input type="number" value={capacity} onChange={(e) => setCapacity(Number(e.target.value))}/>
-              <Text>Price:</Text>
-              <Input type="number" value={price} onChange={(e) => setPrice(Number(e.target.value))}/>
-              <Text>Description:</Text>
-              <Textarea value={description} onChange={(e) => setDescription(e.target.value)}/>
-              <Text>Image URL:</Text>
-              <Input value={image} onChange={(e) => setImage(e.target.value)}/>
-              <Text>Suitability:</Text>
-              <Input value={suitabilityText} onChange={(e) => setSuitabilityText(e.target.value)}/>
+            <VStack spacing={4} align="stretch" mb={6} p={{ base: 4, md: 6 }} bg="white" borderWidth="1px" borderRadius="lg">
+              <FormControl><FormLabel>Venue Name</FormLabel><Input value={venueName} onChange={(e) => setVenueName(e.target.value)}/></FormControl>
+              <FormControl><FormLabel>Venue Location</FormLabel><Input value={location} onChange={(e) => setLocation(e.target.value)}/></FormControl>
+              <FormControl><FormLabel>Capacity</FormLabel><Input type="number" value={capacity} onChange={(e) => setCapacity(Number(e.target.value))}/></FormControl>
+              <FormControl><FormLabel>Price</FormLabel><Input type="number" value={price} onChange={(e) => setPrice(Number(e.target.value))}/></FormControl>
+              <FormControl><FormLabel>Description</FormLabel><Textarea value={description} onChange={(e) => setDescription(e.target.value)}/></FormControl>
+              <FormControl><FormLabel>Image URL</FormLabel><Input value={image} onChange={(e) => setImage(e.target.value)}/></FormControl>
+              <FormControl><FormLabel>Suitability</FormLabel><Input value={suitabilityText} onChange={(e) => setSuitabilityText(e.target.value)}/></FormControl>
               <Button colorScheme="blue"
                 onClick={
                   editingVenue
@@ -895,12 +904,12 @@ export default function Vendor() {
             </VStack>
             <VStack spacing={4} align="stretch">
               {venues.map((venue) => (
-                <Box key={venue.id} p={4} border="1px solid" borderColor="gray.200" rounded="md">
+                <Box key={venue.id} p={4} bg="white" border="1px solid" borderColor="gray.200" rounded="md">
                   <Heading size="sm">Venue Name: {venue.name}</Heading>
                   <Text>Venue Location: {venue.location}</Text>
                   <Text>Capacity: {venue.capacity}</Text>
                   <Text>Price: ${venue.price}</Text>
-                  <HStack mt={3}>
+                  <HStack mt={3} flexWrap="wrap" gap={2}>
                     <Button size="sm" onClick={() => {setEditingVenue(venue); setVenueName(venue.name);
                                                       setLocation(venue.location); setCapacity(venue.capacity);
                                                       setPrice(venue.price); setDescription(venue.description);
@@ -916,7 +925,7 @@ export default function Vendor() {
         {activeTab === "blockedVenue" && (
           <Box>
             {blockMessage && (
-              <Alert status="success" rounded="md" mb={4}>
+              <Alert status={blockError ? "error" : "success"} rounded="md" mb={4}>
                 <AlertIcon />{blockMessage}
               </Alert>
             )}
@@ -934,7 +943,7 @@ export default function Vendor() {
                   </Select>
                   <FormErrorMessage>{blockErrors.venueName}</FormErrorMessage>
                 </FormControl>
-                <HStack spacing={4}>
+                <HStack spacing={4} align="start" flexDirection={{ base: "column", md: "row" }} w="full">
                   <FormControl isInvalid={!!blockErrors.startDate}>
                     <FormLabel fontSize="sm" color="gray.600">Start Date</FormLabel>
                     <Input type="date" value={blockStartDate} onChange={(e) => setBlockStartDate(e.target.value)} focusBorderColor="blue.400"/>
@@ -962,11 +971,11 @@ export default function Vendor() {
             <Heading size="sm" mb={3} color="gray.700">Currently Blocked Periods</Heading>
 
             {blockedPeriods.length === 0 ? (
-              <Text color="gray.400" fontSize="sm">No venues are currently blocked.</Text>) : (
+              <Text color="gray.600" fontSize="sm">No venues are currently blocked.</Text>) : (
               <VStack spacing={3} align="stretch">
                 {blockedPeriods.map((block, index) => (
                   <Box key={index} p={4} bg="red.50" rounded="xl" border="1px solid" borderColor="red.200">
-                    <HStack justify="space-between">
+                    <HStack justify="space-between" flexWrap="wrap" gap={3}>
                       <VStack align="start" spacing={1}>
                         <HStack>
                           <Badge colorScheme="red">BLOCKED</Badge>
@@ -995,5 +1004,4 @@ export default function Vendor() {
     </>
   );
 }
-
 

@@ -1,4 +1,5 @@
 import "@/styles/globals.css";
+import { theme } from "@/styles/theme";
 import type { AppProps } from "next/app";
 import { ChakraProvider, Box } from "@chakra-ui/react";
 import Header from "@/components/Header";
@@ -8,12 +9,13 @@ import { AuthProvider } from "@/context/AuthContext";
 
 export default function App({ Component, pageProps }: AppProps) {
   return (
-    <ChakraProvider>
+    <ChakraProvider theme={theme}>
       <AuthProvider>
         <Box minH="100vh" display="flex" flexDirection="column">
+          <a className="skip-link" href="#main-content">Skip to content</a>
           <Header/>
           <Navigation/>
-          <Box flex="1">
+          <Box as="main" id="main-content" flex="1" w="full" maxW="1200px" mx="auto" minW={0}>
             <Component {...pageProps} />
           </Box>
           <Footer/>

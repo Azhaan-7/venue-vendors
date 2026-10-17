@@ -25,7 +25,7 @@ export function ApplicationHistory({ applications, venues }: Props) {
   };
 
   return (
-    <Box p={6} borderWidth="1px" borderRadius="lg">
+    <Box p={{ base: 4, md: 6 }} borderWidth="1px" borderRadius="lg" bg="white">
       <Heading size="md" mb={4}>Your Application Submissions</Heading>
 
       <VStack spacing={4} align="stretch">

@@ -30,6 +30,7 @@ yarn-error.log*
 
 # env files
 .env*
+!**/.env.example
 
 # vercel
 .vercel
@@ -51,3 +52,6 @@ next-env.d.ts
 # Logs
 logs
 *.log
+
+# Local review archive; may contain private project configuration
+/venue-vendors-review.zip

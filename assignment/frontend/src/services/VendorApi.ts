@@ -1,14 +1,16 @@
-import { api, applicationApi } from "./api";
+import { Venue } from "@/types/venues";
+import { EventApplication } from "@/types/EventApplication";
+import { BlockedPeriod } from "@/types/blockedPeriod";
+import { HireHistory } from "@/types/hireHistory";
+import { api, getCollection } from "./api";
 
 export const vendorApi = {
     getApplications: async (vendorId: number) => {
-        const response = await api.get(`/applications/vendor/${vendorId}`);
-        return response.data;
+        return getCollection<EventApplication>(`/applications/vendor/${vendorId}`);
     },
 
     getHireHistory: async () => {
-        const response = await api.get("/hire-history"); 
-        return response.data;
+        return getCollection<HireHistory>("/hire-history");
     },
 
     approveApplication: async (applicationId: number, commentText: string, venueId: number, vendorId: number) => {
@@ -31,8 +33,7 @@ export const vendorApi = {
     },
 
     getBlockedPeriods: async () => {
-        const response = await api.get("/blocked-periods");
-        return response.data;
+        return getCollection<BlockedPeriod>("/blocked-periods");
     },
 
     createdBlockedPeriod: async (data: {
@@ -52,16 +53,15 @@ export const vendorApi = {
     },
 
     getMyVenues: async (vendorId: number) => {
-        const response = await api.get(`/venues/vendor/${vendorId}`);
-        return response.data;
+        return getCollection<Venue>(`/venues/vendor/${vendorId}`);
     },
 
-    createVenue: async (venueData: any) => {
+    createVenue: async (venueData: Omit<Venue, "id" | "isFeatured"> & { suitabilities?: string[] }) => {
         const response = await api.post("/venues", venueData);
         return response.data;
     },
 
-    updateVenue: async (venueId: number, venueData: any) => {
+    updateVenue: async (venueId: number, venueData: Omit<Venue, "id" | "isFeatured"> & { suitabilities?: string[] }) => {
         const response = await api.put(`/venues/${venueId}`, venueData);
         return response.data;
     },

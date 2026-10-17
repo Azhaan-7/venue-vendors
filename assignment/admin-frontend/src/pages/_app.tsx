@@ -1,4 +1,5 @@
 import "@/styles/globals.css";
+import { theme } from "@/styles/theme";
 import type { AppProps } from "next/app";
 import { ChakraProvider, Box } from "@chakra-ui/react";
 import { ApolloClient, InMemoryCache, HttpLink } from "@apollo/client";
@@ -6,28 +7,33 @@ import { ApolloProvider } from "@apollo/client/react";
 import Header from "@/components/Header";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
+import { AuthProvider } from "@/context/AuthContext";
 
 
 const client = new ApolloClient({
   link: new HttpLink({
-    uri: process.env.NEXT_PUBLIC_GRAPHQL_URL,
+    uri: "/graphql",
+    credentials: "include",
   }),
   cache: new InMemoryCache(),
 });
 
 export default function App({ Component, pageProps }: AppProps) {
   return (
-    <ChakraProvider>
-      <ApolloProvider client={client}>
+    <ChakraProvider theme={theme}>
+      <AuthProvider>
+        <ApolloProvider client={client}>
           <Box minH="100vh" display="flex" flexDirection="column">
-            <Header />
+            <a className="skip-link" href="#main-content">Skip to content</a>
+          <Header />
             <Navigation />
-            <Box flex="1">
+            <Box as="main" id="main-content" flex="1" w="full" maxW="1200px" mx="auto" minW={0}>
               <Component {...pageProps} />
             </Box>
             <Footer />
           </Box>
-      </ApolloProvider>
+        </ApolloProvider>
+      </AuthProvider>
     </ChakraProvider>
   );
 }

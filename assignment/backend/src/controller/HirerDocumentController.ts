@@ -2,6 +2,9 @@ import { Request, Response } from "express";
 import { AppDataSource } from "../data-source";
 import { HirerDocument } from "../entity/HirerDocument";
 import { User } from "../entity/User";
+import { UserRole } from "../entity/UserRole";
+import { vendorCanAccessHirer } from "../auth/authorization";
+import { DOCUMENT_TYPES, inspectDocument } from "../security/documents";
 
 export class HirerDocumentController {
     private documentRepository = AppDataSource.getRepository(HirerDocument);
@@ -19,70 +22,12 @@ export class HirerDocumentController {
         if (!user) {
             return response.status(404).json({ message: "User not found" });
         }
-        const documentType = String(request.body.documentType || "").trim();
-        const fileName = String(request.body.fileName || "").trim();
-        const mimeType = String(request.body.mimeType || "").trim();
-        const fileData = String(request.body.fileData || "");
-
-        const allowedDocumentTypes = [
-            "driverLicense",
-            "publicLiabilityInsurance",
-            "businessRegistration",
-        ];
-
-        if (!documentType) {
-            return response.status(400).json({ message: "Document type is required" });
-        }
-        if (!allowedDocumentTypes.includes(documentType)) {
-            return response.status(400).json({ message: "Invalid document type" });
-        }
-        if (!fileName) {
-            return response.status(400).json({ message: "File name is required" });
-        }
-        if (!mimeType) {
-            return response.status(400).json({ message: "File type is required" });
-        }
-        if (!fileData) {
-            return response.status(400).json({ message: "File data is required" });
-        }
-
-        const lowerFileName = fileName.toLowerCase();
-
-        if (documentType === "driverLicense") {
-            const isJpg =
-                mimeType === "image/jpeg" ||
-                lowerFileName.endsWith(".jpg") ||
-                lowerFileName.endsWith(".jpeg");
-
-            if (!isJpg) {
-                return response.status(400).json({ message: "Driver's license must be a JPG file" });
-            }
-        }
-
-        if (documentType === "publicLiabilityInsurance" || documentType === "businessRegistration") {
-            const isPdf =
-                mimeType === "application/pdf" ||
-                lowerFileName.endsWith(".pdf");
-
-            if (!isPdf) {
-                return response.status(400).json({ message: "This file must be a PDF" });
-            }
-        }
-
-        const base64Data = fileData.includes(",") ? fileData.split(",")[1] : fileData;
-        const fileSizeBytes = Buffer.byteLength(base64Data, "base64");
-
-        if (fileSizeBytes > 2 * 1024 * 1024) {
-            return response.status(400).json({ message: "File size can't exceed 2MB" });
-        }
-
-        const documentData = {
-            hirer: user,
-            documentType,
-            fileName,
-            mimeType,
-            fileData,
-        };
+        let inspected: ReturnType<typeof inspectDocument>;
+        try { inspected = inspectDocument(request.body); }
+        catch (error) { return response.status(400).json({ message: error.message }); }
+        const { bytes, ...documentData } = inspected;
+        const documentType = inspected.documentType;
+        Object.assign(documentData, { hirer: user });
 
         let document = await this.documentRepository.findOne({
             where: {
@@ -100,7 +45,14 @@ export class HirerDocumentController {
 
         const uploaded = await this.documentRepository.save(document);
 
-        return response.json(uploaded);
+        return response.json({
+            id: uploaded.id,
+            documentType: uploaded.documentType,
+            fileName: uploaded.fileName,
+            mimeType: uploaded.mimeType,
+            downloadUrl: `/api/hirer-documents/${userId}/${uploaded.documentType}/content`,
+            uploadedAt: uploaded.uploadedAt,
+        });
     }
 
     async getByHirer(request: Request, response: Response) {
@@ -110,15 +62,53 @@ export class HirerDocumentController {
             return response.status(400).json({ message: "Invalid user ID" });
         }
 
+        const isOwner = request.authUser!.id === userId;
+        const isRelatedVendor = request.authUser!.role === UserRole.VENDOR &&
+            await vendorCanAccessHirer(request.authUser!.id, userId);
+        if (!isOwner && !isRelatedVendor) {
+            return response.status(403).json({ message: "You cannot access these documents" });
+        }
+
         const documents = await this.documentRepository.find({
             where: {
                 hirer: { id: userId },
             },
-            relations: ["hirer"],
+            select: { id: true, documentType: true, fileName: true, mimeType: true, uploadedAt: true },
+            take: 3,
+            order: { id: "ASC" },
         });
 
-        return response.json(documents);
+        return response.json(documents.map(document => ({
+            id: document.id,
+            documentType: document.documentType,
+            fileName: document.fileName,
+            mimeType: document.mimeType,
+            downloadUrl: `/api/hirer-documents/${userId}/${document.documentType}/content`,
+            uploadedAt: document.uploadedAt,
+        })));
     }
+    async download(request: Request, response: Response) {
+        const userId = Number(request.params.id);
+        const documentType = String(request.params.documentType);
+        if (!Number.isSafeInteger(userId) || userId < 1 || !DOCUMENT_TYPES.includes(documentType as any)) {
+            return response.status(400).json({ message: "Invalid document request" });
+        }
+        const isOwner = request.authUser!.id === userId;
+        if (!isOwner && !(request.authUser!.role === UserRole.VENDOR && await vendorCanAccessHirer(request.authUser!.id, userId))) {
+            return response.status(403).json({ message: "You cannot access these documents" });
+        }
+        const document = await this.documentRepository.findOne({ where: { hirer: { id: userId }, documentType } });
+        if (!document) return response.status(404).json({ message: "Document not found" });
+        let inspected: ReturnType<typeof inspectDocument>;
+        try { inspected = inspectDocument(document); }
+        catch { return response.status(422).json({ message: "Stored document needs to be replaced with a valid supported file" }); }
+        response.setHeader("Content-Type", inspected.mimeType);
+        response.setHeader("Content-Disposition", `attachment; filename="document.${inspected.mimeType === "image/jpeg" ? "jpg" : "pdf"}"`);
+        response.setHeader("Cache-Control", "no-store");
+        response.setHeader("Content-Security-Policy", "default-src 'none'; sandbox");
+        return response.send(inspected.bytes);
+    }
+
     async deleteDocument(request: Request, response: Response) {
         const userId = Number(request.params.id);
         const documentType = String(request.params.documentType);

@@ -1,215 +1,97 @@
-# Assignment 2 – Venue Vendor (VV)
+# Venue Vendors
 
-[![Open in Visual Studio Code](https://classroom.github.com/assets/open-in-vscode-2e0aaae1b6195c2367325f4f02e2d04e9abb55f0b24a779b69b11b9e10269abc.svg)](https://classroom.github.com/online_ide?assignment_repo_id=23768257&assignment_repo_type=AssignmentRepo)
+## Project overview
 
-## Team Members
+Venue Vendors is a full-stack portfolio project for finding venues, submitting event applications and managing booking decisions. It provides separate workflows for hirers, vendors and administrators.
 
-* Dilushi Mirthula Rajendran – s4136532
-* Azhaanul Haque Farooqui – s4149471
+Use sample accounts and documents for demonstrations; do not upload real identity documents.
 
-## GitHub Repository
+## Key features
 
-https://github.com/rmit-fsd-2026-s1/a2-fsd-pra01-02-wed-6-30pm-alex-team10
+- **Hirers:** Manage profiles and supporting documents, search venues, rank preferences, save event drafts, submit applications and review application and hiring history.
+- **Vendors:** Manage venues and blocked periods, review applicant information and documents, approve or reject applications, leave comments and view venue utilisation charts.
+- **Administrators:** Create, edit, delete and feature venues, assign vendors, and view booking and applicant reports with PDF export.
 
----
+## Tech stack
 
-# Deployment Links
+- **Interfaces:** TypeScript, React, Next.js and Chakra UI; Axios for REST requests and Apollo Client for GraphQL.
+- **APIs and data:** Node.js, Express, Apollo Server, GraphQL, TypeORM and Microsoft SQL Server / Azure SQL.
+- **Authentication:** Signed JWT sessions in HttpOnly cookies and Argon2id password hashing.
+- **Charts and reports:** Chart.js, react-chartjs-2 and jsPDF.
+- **Quality checks:** Jest, React Testing Library, Node.js test runner, ESLint and TypeScript.
 
-## VV System
+## Architecture
 
-Frontend:
-https://vv-vendors-frontend-team-10.onrender.com
+The repository contains four independently run applications:
 
-Backend:
-https://vv-backend-team-10.onrender.com
+| Application | Directory | Local address |
+| --- | --- | --- |
+| Hirer and vendor interface | `assignment/frontend` | `http://localhost:3000` |
+| REST API | `assignment/backend` | `http://localhost:3001/api` |
+| Admin interface | `assignment/admin-frontend` | `http://localhost:3002` |
+| Admin GraphQL API | `assignment/admin-backend` | `http://localhost:3003/graphql` |
 
-## Admin System
+Both interfaces proxy browser requests through their own origin. The regular interface uses the REST API; the admin interface uses REST for authentication and GraphQL for administration. Both APIs share the SQL database. Database schema synchronisation and automatic migrations are disabled.
 
-Frontend:
-https://admin-frontend-team-10.onrender.com
+## Local development
 
-Backend:
-https://admin-backend-team-10.onrender.com
+### Prerequisites
 
----
+Use Node.js **22 or 24**, npm, and a SQL Server / Azure SQL development database with a compatible schema. Startup does not create the database schema; see [DEPLOYMENT.md](DEPLOYMENT.md) for database preparation requirements.
 
+### Environment
 
-
-
-
-## Prerequisites
-
-Install:
-
-* Node.js
-* npm
-* Microsoft SQL Server database access
-
----
-
-## VV Backend
-
-
-```bash
-cd assignment/backend
-npm install
-npm run build
-npm start
-```
-
-Create a `.env` file inside `assignment/backend`:
+Copy each backend's `.env.example` to `.env` in the same directory. Set the following in **both** backend files, using the same development database and randomly generated JWT secret:
 
 ```env
-DB_HOST=<database-host>
+DB_HOST=<development-database-host>
 DB_USER=<database-user>
 DB_PASSWORD=<database-password>
 DB_NAME=<database-name>
+JWT_SECRET=<shared-random-secret-at-least-32-bytes>
+NODE_ENV=development
 ```
 
-Backend URL:
+Set `FRONTEND_ORIGINS=http://localhost:3000,http://localhost:3002` in `assignment/backend/.env` and `ADMIN_FRONTEND_ORIGINS=http://localhost:3002` in `assignment/admin-backend/.env`. Keep credentials out of source control.
 
-```text
-http://localhost:3001
-```
-
----
-
-## VV Frontend
-
-
-
-```bash
-cd assignment/frontend
-npm install
-npm run dev
-```
-
-Frontend URL:
-
-```text
-http://localhost:3000
-```
-
----
-
-## Admin Backend
-
-
-
-```bash
-cd assignment/admin-backend
-npm install
-npm run build
-npm start
-```
-
-Create a `.env` file inside `assignment/admin-backend`:
+Copy each frontend's `.env.example` to `.env.local` in its directory:
 
 ```env
-DB_HOST=<database-host>
-DB_USER=<database-user>
-DB_PASSWORD=<database-password>
-DB_NAME=<database-name>
+# assignment/frontend/.env.local
+BACKEND_URL=http://localhost:3001
 ```
-
-GraphQL endpoint:
-
-```text
-http://localhost:3003/graphql
-```
-
----
-
-## Admin Frontend
-
-
-```bash
-cd assignment/admin-frontend
-npm install
-npm run dev
-```
-
-Create a `.env.local` file inside `assignment/admin-frontend`:
 
 ```env
-NEXT_PUBLIC_GRAPHQL_URL=http://localhost:3003/graphql
+# assignment/admin-frontend/.env.local
+BACKEND_URL=http://localhost:3001
+ADMIN_BACKEND_URL=http://localhost:3003
 ```
 
-Admin frontend URL:
+### Run the applications
 
-```text
-http://localhost:3002
-```
+Run `npm ci` inside each application directory, then start each application in a separate terminal:
 
----
+| Directory | Commands |
+| --- | --- |
+| `assignment/backend` | `npm run build`, then `npm start` |
+| `assignment/admin-backend` | `npm run build`, then `npm start` |
+| `assignment/frontend` | `npm run dev -- --port 3000` |
+| `assignment/admin-frontend` | `npm run dev -- --port 3002` |
 
-# Features Implemented
+Create hirer and vendor accounts through signup. Admin access requires manual provisioning as described in [DEPLOYMENT.md](DEPLOYMENT.md).
 
-## Hirer
+### Verification
 
- Create and manage profile
- Upload required documents
- Create event applications
- Rank venue preferences
- Save event drafts
- View application history
- View hiring history
- Backend and frontend validation
+Run `npm test`, `npm run typecheck` and `npm run build` in each application directory. Both frontends also support `npm run lint` and `npm test -- --runInBand`; the backends have no lint script.
 
-## Vendor
+Backend tests use an offline isolation guard, synthetic fixtures and repository stubs. They do not connect to SQL Server or verify the live schema. Builds do not start the APIs. Use a development database for runtime testing.
 
- Manage venues
- Approve or reject applications
- View hirer information
- Manage blocked periods
- View venue utilisation statistics
- Generate reports
+## Deployment
 
-## Admin (HD)
+See [DEPLOYMENT.md](DEPLOYMENT.md) for Vercel and Render configuration, environment variables, database prerequisites and deployment checks. [SECURITY_REVIEW.md](SECURITY_REVIEW.md) records verification results and known limitations.
 
- Admin login
- View all venues
-Create venues
- Edit venues
- Delete venues
- Assign vendors to venues
- Select featured venues
- Generate reports
- GraphQL-based database operations
+## Acknowledgments
 
----
+Copyright © 2026 RMIT University.
 
-# References
-
-## Course Materials
-
- Week 7   – Node.js, Express.js and TypeORM
- Week 8   – Database Integration and REST APIs
- Week 9   – GraphQL Introduction
- Week 10  – GraphQL Queries, Mutations and Resolvers
- Week 11  – GraphQL Subscriptions
-
-## Documentation
-
- https://typeorm.io
- https://www.apollographql.com/docs
- https://graphql.org
- https://chakra-ui.com
- https://nextjs.org/docs
- https://react.dev
-
----
-
-# Generative AI Usage
-
-Generative AI tools were used during development for:
-
-Explaining GraphQL concepts and Apollo Client usage.
-Reviewing TypeScript compilation errors.
-Assisting with debugging backend validation logic.
-Reviewing deployment configuration for Render.
-Reviewing React component structure and TypeScript typing.
-Assisting with project documentation.
-Formatting README.md
-
-All generated suggestions were reviewed, modified, tested and integrated by the us before inclusion in the final submission.
+Originally developed for **Full Stack Development, Semester 1, 2026**, by **Dilushi Mirthula Rajendran** and **Azhaanul Haque Farooqui**. The original course lecturer granted permission to publish and self-host the project subject to attribution. This repository does not grant an open-source licence or claim a transfer of copyright.

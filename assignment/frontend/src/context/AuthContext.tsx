@@ -1,3 +1,4 @@
+import axios from "axios";
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { authApi } from "@/services/api";
 
@@ -10,20 +11,22 @@ export interface SignedUser {
 
 interface AuthContextType {
   user: SignedUser | null;
+  isLoading: boolean;
   signIn: (email: string, password: string) => Promise<SignedUser | null>;
-  signOut: () => void;
+  signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<SignedUser | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const storedUser = localStorage.getItem("vv_current_user");
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
-    }
+    authApi.me()
+      .then(setUser)
+      .catch(() => setUser(null))
+      .finally(() => setIsLoading(false));
   }, []);
 
   const signIn = async(email: string, password: string): Promise<SignedUser | null> => {
@@ -31,21 +34,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const data = await authApi.signIn({ email, password });
       const signedUser: SignedUser = { id: data.id, email: data.email, role: data.role, name: data.name };
       setUser(signedUser);
-      localStorage.setItem("vv_current_user", JSON.stringify(signedUser));
       return signedUser;
     } catch (error) {
-      console.log(error);
-      return null;
+      if (axios.isAxiosError(error) && error.response?.status === 401) return null;
+      throw error;
     }
   };
 
-  const signOut = () => {
+  const signOut = async () => {
+    await authApi.signOut();
     setUser(null);
-    localStorage.removeItem("vv_current_user");
   };
 
   return (
-    <AuthContext.Provider value={{ user, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, isLoading, signIn, signOut }}>
       {children}
     </AuthContext.Provider>
   );

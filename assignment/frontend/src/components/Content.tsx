@@ -1,10 +1,10 @@
-import { Box, Heading, Text, VStack, HStack, SimpleGrid, Card, CardBody, Badge, Button } from "@chakra-ui/react";
+import { Box, Heading, Text, VStack, HStack, SimpleGrid, Card, CardBody, Badge } from "@chakra-ui/react";
 
 export default function HomeContent() {
   return (
-    <Box p={6}>
+    <Box px={{ base: 4, md: 6 }} py={{ base: 6, md: 8 }}>
         <VStack spacing={8} align="stretch">
-            <Box textAlign="center" py={10}>
+            <Box textAlign="center" py={{ base: 6, md: 10 }}>
                 <Heading mb={4}>Welcome to Venue Vendors</Heading>
                     <Text fontSize="lg" maxW="700px" mx="auto">Venue Vendors helps event organizers find, compare, and hire the right venues quickly and easily.</Text>
             </Box>
@@ -37,7 +37,7 @@ export default function HomeContent() {
 
             <Box>
                 <Heading size="md" mb={4}>How it works</Heading>
-                <HStack spacing={4} flexWrap="wrap">
+                <HStack spacing={0} gap={4} flexWrap="wrap" align="stretch">
                     <Card flex="1" minW="220px">
                         <CardBody>
                             <Text fontWeight="bold" mb={2}>1. Sign in</Text>

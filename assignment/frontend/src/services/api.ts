@@ -1,9 +1,24 @@
 import axios from "axios";
+import { DocumentMetadata, DocumentUpload } from "@/types/documents";
+import { Profile } from "@/types/profiles";
+import { EventDetails } from "@/types/EventApplication";
 import { EventApplication } from "@/types/EventApplication";
 // import { Profile } from "@/types/profiles";
 export const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL,
+  baseURL: "/api",
+  withCredentials: true,
 });
+
+// Preserve array-based screens while bounding each database query and the total client workload.
+export async function getCollection<T>(path: string): Promise<T[]> {
+  const results: T[] = [];
+  for (let offset = 0; offset < 5000; offset += 100) {
+    const response = await api.get<T[]>(path, { params: { limit: 100, offset } });
+    results.push(...response.data);
+    if (response.data.length < 100) return results;
+  }
+  throw new Error("This collection needs a paginated screen before loading 5000 or more records");
+}
 
 export interface SignInData {
   email: string;
@@ -28,20 +43,28 @@ export const authApi = {
     return response.data;
   },
 
+  me: async () => {
+    const response = await api.get("/auth/me");
+    return response.data;
+  },
+
+  signOut: async () => {
+    await api.post("/auth/signout");
+  },
+
   getProfile: async (id: number) => {
     const response = await api.get(`/profile/${id}`);
     return response.data;
   },
 
-  updateProfile: async (id: number, data: any) => {
+  updateProfile: async (id: number, data: Pick<Profile, "name" | "phoneNumber" | "isBusiness" | "abn">) => {
     const response = await api.put(`/profile/${id}`, data);
     return response.data;
   }
 };
 export const applicationApi = {
   hirerApplications: async (hirerId: number) => {
-    const response = await api.get(`/applications/hirer/${hirerId}`);
-    return response.data;
+    return getCollection<EventApplication>(`/applications/hirer/${hirerId}`);
   },
 
   createApplication: async (application: EventApplication) => {
@@ -60,13 +83,13 @@ export const applicationApi = {
   }
 };
 export const hirerDocumentApi = {
-  uploadDocument: async (hirerId: number, document: any) => {
+  uploadDocument: async (hirerId: number, document: DocumentUpload) => {
     const response = await api.post(`/hirer-documents/${hirerId}`, document);
     return response.data;
   },
 
   getDocuments: async (hirerId: number) => {
-    const response = await api.get(`/hirer-documents/${hirerId}`);
+    const response = await api.get<DocumentMetadata[]>(`/hirer-documents/${hirerId}`);
     return response.data;
   },
   deleteDocument: async (hirerId: number, documentType: string) => {
@@ -81,7 +104,7 @@ export const applicationDraftApi = {
     return response.data;
   },
 
-  saveDraft: async (hirerId: number, event: any, venues: number[]) => {
+  saveDraft: async (hirerId: number, event: EventDetails, venues: number[]) => {
     const response = await api.put(`/application-drafts/${hirerId}`, {
       event,
       venues,

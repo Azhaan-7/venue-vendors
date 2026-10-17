@@ -1,45 +1,22 @@
 import "reflect-metadata";
-import express from "express";
-import cors from "cors";
-import { json } from "body-parser";
-import { ApolloServer } from "@apollo/server";
-import { expressMiddleware } from "@as-integrations/express4";
-
 import { AppDataSource } from "./data-source";
-import { typeDefs, resolvers } from "./schema";
+import { createApp } from "./app";
+import { positiveInteger, validateStartupEnvironment } from "./config";
 
-const app = express();
-const PORT = process.env.PORT || 3003;
-
-app.use(cors());
-app.use(express.json({ limit: "10mb" }));
-
-async function startServer() {
-  try {
-    await AppDataSource.initialize();
-    console.log("Admin Data Source has been initialized!");
-
-    const server = new ApolloServer({
-      typeDefs,
-      resolvers,
-    });
-
-    await server.start();
-
-    app.use(
-      "/graphql",
-      cors<cors.CorsRequest>(),
-      json({ limit: "10mb" }),
-      expressMiddleware(server)
-    );
-
-    app.listen(PORT, () => {
-      console.log(`Admin backend is running on port ${PORT}`);
-      console.log(`GraphQL endpoint: http://localhost:${PORT}/graphql`);
-    });
-  } catch (error) {
-    console.log("Error during Admin Data Source initialization:", error);
+export async function startServer() {
+  validateStartupEnvironment();
+  const { app, server } = await createApp();
+  try { await AppDataSource.initialize(); }
+  catch {
+    await server.stop();
+    throw new Error("Database initialization failed. Check connectivity, TLS, firewall and credentials; details suppressed.");
   }
+  const listener = app.listen(positiveInteger("PORT", 3003, 65535), "0.0.0.0");
+  listener.on("error", () => { console.error("HTTP listener failed"); process.exitCode = 1; });
+  return listener;
 }
 
-startServer();
+if (require.main === module) startServer().catch(error => {
+  console.error(error.message);
+  process.exitCode = 1;
+});

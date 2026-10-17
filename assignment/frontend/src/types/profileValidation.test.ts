@@ -5,7 +5,7 @@ describe("validateProfile", () => {
   test("Return an ABN error if ABN isn't exactly 11 digits", () => {
     const profile: Profile = {
       name: "Alice",
-      phone: "+61 406123098",
+      phoneNumber: "0400000000",
       isBusiness: true,
       abn: "12345",
       driverLicense: undefined,
@@ -22,7 +22,7 @@ describe("validateProfile", () => {
   test("Return a phone error if letters are entered in the phone number", () => {
     const profile: Profile = {
       name: "Charlie",
-      phone: "+61 409123712xyzabc",
+      phoneNumber: "0400000000xyzabc",
       isBusiness: false,
       abn: "",
       driverLicense: undefined,

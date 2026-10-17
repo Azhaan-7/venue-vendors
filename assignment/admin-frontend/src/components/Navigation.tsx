@@ -1,28 +1,26 @@
-import { Flex, Button } from "@chakra-ui/react";
+import { requestError } from "@/utils/requestError";
+import { Flex, Button, useToast } from "@chakra-ui/react";
 import { useRouter } from "next/router";
-import { useEffect, useState } from "react";
+import { useAuth } from "@/context/AuthContext";
 
 export default function Navigation() {
+  const toast = useToast();
   const router = useRouter();
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const { user, isLoading, signOut } = useAuth();
+  const isLoggedIn = user?.role === "admin";
 
-  useEffect(() => {
-    setIsLoggedIn(localStorage.getItem("adminLoggedIn") === "true");
-  }, [router.pathname]);
-
-  const handleSignOut = () => {
-    localStorage.removeItem("adminLoggedIn");
-    setIsLoggedIn(false);
-    router.push("/signin");
+  const handleSignOut = async () => {
+    try { await signOut(); await router.push("/signin"); }
+    catch (error) { toast({ title: "Sign out failed", description: requestError(error, "Check your connection and try again."), status: "error", isClosable: true }); }
   };
 
   return (
-    <Flex bg="gray.100" p={3} justify="center" gap={4}>
+    <Flex as="nav" aria-label="Main navigation" bg="gray.100" px={{ base: 3, md: 6 }} py={3} justify="center" gap={{ base: 1, md: 3 }} flexWrap="wrap">
       <Button variant="ghost" onClick={() => router.push("/")}>
         Home
       </Button>
 
-      {!isLoggedIn && (
+      {!isLoading && !isLoggedIn && (
         <Button variant="ghost" onClick={() => router.push("/signin")}>
           Sign In
         </Button>
@@ -33,6 +31,7 @@ export default function Navigation() {
           Sign Out
         </Button>
       )}
+      <Button variant="ghost" onClick={() => router.push("/about")}>About Us</Button>
     </Flex>
   );
 }

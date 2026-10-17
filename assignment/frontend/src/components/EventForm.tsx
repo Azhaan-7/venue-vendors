@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { EventDetails } from "../types/EventApplication";
 import { Box, VStack, FormControl, FormLabel, Input, Button, Heading, useToast } from "@chakra-ui/react";
 type EventFormProps = {
@@ -14,8 +14,9 @@ type EventFormProps = {
 // Lets the user enter event info, save it as a draft, and then submit an application if everything is valid
 export function EventForm({ event, setEvent, saveEvent, applyEvent }: EventFormProps) {
     const toast = useToast();
+    const [pending, setPending] = useState<"save" | "apply" | null>(null);
     return (
-        <Box p={6} borderWidth="1px" borderRadius="lg">
+        <Box p={{ base: 4, md: 6 }} borderWidth="1px" borderRadius="lg" bg="white">
             <Heading size={"md"} mb={4}>Your Event</Heading>
             <VStack spacing={4}>
                 <FormControl>
@@ -61,7 +62,10 @@ export function EventForm({ event, setEvent, saveEvent, applyEvent }: EventFormP
                 </FormControl>
                 <Button
                     colorScheme="blue"
+                    isLoading={pending === "save"} isDisabled={pending === "apply"} loadingText="Saving draft"
                     onClick={async () => {
+                        setPending("save");
+                        try {
                         const success = await saveEvent();
 
                         if (success) {
@@ -73,14 +77,17 @@ export function EventForm({ event, setEvent, saveEvent, applyEvent }: EventFormP
                                 isClosable: true,
                             });
                         }
+                        } finally { setPending(null); }
                     }}
                 >
                     Save event draft
                 </Button>
                 <Button
+                    isLoading={pending === "apply"} isDisabled={pending === "save"} loadingText="Submitting application"
                     //async function for api
                     onClick={async () => {
-                        // applyEvent does all the validation + saving to localStorage
+                        setPending("apply");
+                        try {
                         const success = await applyEvent();
 
                         if (success) {
@@ -93,6 +100,7 @@ export function EventForm({ event, setEvent, saveEvent, applyEvent }: EventFormP
                                 isClosable: true,
                             });
                         }
+                        } finally { setPending(null); }
                     }}
                 >
                     Apply for Venue

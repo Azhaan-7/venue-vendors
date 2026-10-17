@@ -1,3 +1,5 @@
+import { GraphQLError } from "graphql";
+import { positiveId, venueInputError } from "./security/input";
 import { gql } from "graphql-tag";
 import { AppDataSource } from "./data-source";
 import { Venue } from "./entity/Venue";
@@ -6,6 +8,7 @@ import { UserRole } from "./entity/UserRole";
 import { VenueSuitability } from "./entity/VenueSuitability";
 import { Application } from "./entity/Application";
 import { ApplicationStatus } from "./entity/ApplicationStatus";
+import { GraphQLContext, requireAdmin } from "./auth/context";
 
 export const typeDefs = gql`
   type VenueSuitability {
@@ -53,8 +56,8 @@ export const typeDefs = gql`
 
   type Query {
   status: String!
-  venues: [Venue!]!
-  vendors: [Vendor!]!
+  venues(limit: Int = 100, offset: Int = 0): [Venue!]!
+  vendors(limit: Int = 100, offset: Int = 0): [Vendor!]!
   adminReports: AdminReports!
 
 }
@@ -88,12 +91,28 @@ deleteVenue(id: ID!): Boolean!
 }
 `;
 
+function page(args: any) {
+  const take = args?.limit ?? 100;
+  const skip = args?.offset ?? 0;
+  if (!Number.isInteger(take) || take < 1 || take > 200 || !Number.isInteger(skip) || skip < 0 || skip > 100000) {
+    throw new GraphQLError("Invalid pagination", { extensions: { code: "BAD_USER_INPUT" } });
+  }
+  return { take, skip };
+}
+function validateVenue(args: any) {
+  const error = venueInputError(args);
+  if (error || !positiveId(args.vendorId) || (args.id !== undefined && !positiveId(args.id))) {
+    throw new GraphQLError(error || "Invalid venue or vendor ID", { extensions: { code: "BAD_USER_INPUT" } });
+  }
+}
 export const resolvers = {
   Query: {
-    status: () => "Admin GraphQL backend is working",
+    status: (_: unknown, __: unknown, context: GraphQLContext) => { requireAdmin(context); return "Admin GraphQL backend is working"; },
 
-    venues: async () => {
+    venues: async (_: unknown, args: unknown, context: GraphQLContext) => {
+      requireAdmin(context);
       return await AppDataSource.getRepository(Venue).find({
+        ...page(args),
         relations: {
           vendor: true,
           venueSuitabilities: true,
@@ -104,8 +123,11 @@ export const resolvers = {
       });
     },
 
-    vendors: async () => {
+    vendors: async (_: unknown, args: unknown, context: GraphQLContext) => {
+      requireAdmin(context);
       return await AppDataSource.getRepository(User).find({
+        ...page(args),
+        select: { id: true, email: true },
         where: {
           role: UserRole.VENDOR,
         },
@@ -115,16 +137,20 @@ export const resolvers = {
       });
     },
 
-    adminReports: async () => {
+    adminReports: async (_: unknown, __: unknown, context: GraphQLContext) => {
+      requireAdmin(context);
       const applicationRepository = AppDataSource.getRepository(Application);
 
       const applications = await applicationRepository.find({
+        take: 5001,
+        order: { id: "ASC" },
         relations: {
           hirer: true,
           approvedVenue: true,
         },
       });
 
+      if (applications.length > 5000) throw new GraphQLError("Report exceeds 5000 applications; implement database aggregation before increasing this limit", { extensions: { code: "BAD_USER_INPUT" } });
       const venueReports: any = {};
       const hirerReports: any = {};
 
@@ -253,186 +279,192 @@ export const resolvers = {
 
   },
   Mutation: {
-    createVenue: async (_: any, args: any) => {
+    createVenue: async (_: any, args: any, context: GraphQLContext) => {
+      requireAdmin(context);
+      validateVenue(args);
 
       if (!args.name?.trim()) {
-        throw new Error("Venue name is required");
+        throw new GraphQLError("Venue name is required", { extensions: { code: "BAD_USER_INPUT" } });
       }
 
       if (!args.location?.trim()) {
-        throw new Error("Venue location is required");
+        throw new GraphQLError("Venue location is required", { extensions: { code: "BAD_USER_INPUT" } });
       }
 
       if (!args.description?.trim()) {
-        throw new Error("Venue description is required");
+        throw new GraphQLError("Venue description is required", { extensions: { code: "BAD_USER_INPUT" } });
       }
 
       if (!args.image?.trim()) {
-        throw new Error("Venue image is required");
+        throw new GraphQLError("Venue image is required", { extensions: { code: "BAD_USER_INPUT" } });
       }
 
       if (args.capacity <= 0) {
-        throw new Error("Capacity must be greater than 0");
+        throw new GraphQLError("Capacity must be greater than 0", { extensions: { code: "BAD_USER_INPUT" } });
       }
 
       if (args.price < 0) {
-        throw new Error("Price cannot be negative");
+        throw new GraphQLError("Price cannot be negative", { extensions: { code: "BAD_USER_INPUT" } });
       }
 
-      const venueRepository = AppDataSource.getRepository(Venue);
-      const userRepository = AppDataSource.getRepository(User);
-      const suitabilityRepository = AppDataSource.getRepository(VenueSuitability);
+      return AppDataSource.transaction(async manager => {
+        const venueRepository = manager.getRepository(Venue);
+        const userRepository = manager.getRepository(User);
+        const suitabilityRepository = manager.getRepository(VenueSuitability);
 
-      //adding check to see if there are any duplicate venues, none should have the same namme and location
-      const existingVenues = await venueRepository.find();
+        //adding check to see if there are any duplicate venues, none should have the same namme and location
+        const duplicateVenue = await venueRepository.createQueryBuilder("venue")
+          .where("LOWER(LTRIM(RTRIM(venue.name))) = :name", { name: args.name.trim().toLowerCase() })
+          .andWhere("LOWER(LTRIM(RTRIM(venue.location))) = :location", { location: args.location.trim().toLowerCase() })
+          .getOne();
 
-      const duplicateVenue = existingVenues.find((existingVenue) =>
-        existingVenue.name.trim().toLowerCase() === args.name.trim().toLowerCase() &&
-        existingVenue.location.trim().toLowerCase() === args.location.trim().toLowerCase()
-      );
+        if (duplicateVenue) {
+          throw new GraphQLError("A venue with this name and location already exists", { extensions: { code: "BAD_USER_INPUT" } });
+        }
 
-      if (duplicateVenue) {
-        throw new Error("A venue with this name and location already exists");
-      }
+        const venue = new Venue();
+        venue.name = args.name;
+        venue.location = args.location;
+        venue.capacity = args.capacity;
+        venue.price = args.price;
+        venue.description = args.description;
+        venue.image = args.image;
+        venue.isFeatured = args.isFeatured === true;
 
-      const venue = new Venue();
-      venue.name = args.name;
-      venue.location = args.location;
-      venue.capacity = args.capacity;
-      venue.price = args.price;
-      venue.description = args.description;
-      venue.image = args.image;
-      venue.isFeatured = args.isFeatured === true;
+        if (args.vendorId) {
+          const vendor = await userRepository.findOne({
+            where: {
+              id: Number(args.vendorId),
+              role: UserRole.VENDOR,
+            },
+          });
 
-      if (args.vendorId) {
-        const vendor = await userRepository.findOne({
-          where: {
-            id: Number(args.vendorId),
-            role: UserRole.VENDOR,
+          if (!vendor) throw new GraphQLError("Vendor not found", { extensions: { code: "BAD_USER_INPUT" } });
+          venue.vendor = vendor;
+        }
+
+        const savedVenue = await venueRepository.save(venue);
+        //adding suitabilities, max 4
+        if (Array.isArray(args.suitabilities)) {
+          let suitabilityCount = 0;
+          for (const keyword of args.suitabilities) {
+            if (keyword.trim().length > 0 && suitabilityCount < 4) {
+              const suitability = new VenueSuitability();
+              suitability.keyword = keyword.trim();
+              suitability.venue = savedVenue;
+              await suitabilityRepository.save(suitability);
+              suitabilityCount++;
+            }
+          }
+        }
+
+        return await venueRepository.findOne({
+          where: { id: savedVenue.id },
+          relations: {
+            vendor: true,
+            venueSuitabilities: true,
+          },
+        });
+      });
+    },
+    updateVenue: async (_: any, args: any, context: GraphQLContext) => {
+      requireAdmin(context);
+      validateVenue(args);
+      return AppDataSource.transaction(async manager => {
+        const venueRepository = manager.getRepository(Venue);
+        const userRepository = manager.getRepository(User);
+        const suitabilityRepository = manager.getRepository(VenueSuitability);
+
+        const venue = await venueRepository.findOne({
+          where: { id: Number(args.id) },
+          relations: {
+            vendor: true,
+            venueSuitabilities: true,
           },
         });
 
-        if (vendor) {
+        if (!venue) {
+          throw new GraphQLError("Venue not found", { extensions: { code: "BAD_USER_INPUT" } });
+        }
+
+        if (!args.name?.trim()) {
+          throw new GraphQLError("Venue name is required", { extensions: { code: "BAD_USER_INPUT" } });
+        }
+
+        if (!args.location?.trim()) {
+          throw new GraphQLError("Venue location is required", { extensions: { code: "BAD_USER_INPUT" } });
+        }
+
+        if (!args.description?.trim()) {
+          throw new GraphQLError("Venue description is required", { extensions: { code: "BAD_USER_INPUT" } });
+        }
+
+        if (!args.image?.trim()) {
+          throw new GraphQLError("Venue image is required", { extensions: { code: "BAD_USER_INPUT" } });
+        }
+
+        if (args.capacity <= 0) {
+          throw new GraphQLError("Capacity must be greater than 0", { extensions: { code: "BAD_USER_INPUT" } });
+        }
+
+        if (args.price < 0) {
+          throw new GraphQLError("Price cannot be negative", { extensions: { code: "BAD_USER_INPUT" } });
+        }
+
+        venue.name = args.name;
+        venue.location = args.location;
+        venue.capacity = args.capacity;
+        venue.price = args.price;
+        venue.description = args.description;
+        venue.image = args.image;
+        venue.isFeatured = args.isFeatured === true;
+
+        if (args.vendorId) {
+          const vendor = await userRepository.findOne({
+            where: {
+              id: Number(args.vendorId),
+              role: UserRole.VENDOR,
+            },
+          });
+
+          if (!vendor) throw new GraphQLError("Vendor not found", { extensions: { code: "BAD_USER_INPUT" } });
           venue.vendor = vendor;
         }
-      }
 
-      const savedVenue = await venueRepository.save(venue);
-      //adding suitabilities, max 4
-      if (Array.isArray(args.suitabilities)) {
-        let suitabilityCount = 0;
-        for (const keyword of args.suitabilities) {
-          if (keyword.trim().length > 0 && suitabilityCount < 4) {
-            const suitability = new VenueSuitability();
-            suitability.keyword = keyword.trim();
-            suitability.venue = savedVenue;
-            await suitabilityRepository.save(suitability);
-            suitabilityCount++;
-          }
-        }
-      }
-
-      return await venueRepository.findOne({
-        where: { id: savedVenue.id },
-        relations: {
-          vendor: true,
-          venueSuitabilities: true,
-        },
-      });
-    },
-    updateVenue: async (_: any, args: any) => {
-      const venueRepository = AppDataSource.getRepository(Venue);
-      const userRepository = AppDataSource.getRepository(User);
-      const suitabilityRepository = AppDataSource.getRepository(VenueSuitability);
-
-      const venue = await venueRepository.findOne({
-        where: { id: Number(args.id) },
-        relations: {
-          vendor: true,
-          venueSuitabilities: true,
-        },
-      });
-
-      if (!venue) {
-        throw new Error("Venue not found");
-      }
-
-      if (!args.name?.trim()) {
-        throw new Error("Venue name is required");
-      }
-
-      if (!args.location?.trim()) {
-        throw new Error("Venue location is required");
-      }
-
-      if (!args.description?.trim()) {
-        throw new Error("Venue description is required");
-      }
-
-      if (!args.image?.trim()) {
-        throw new Error("Venue image is required");
-      }
-
-      if (args.capacity <= 0) {
-        throw new Error("Capacity must be greater than 0");
-      }
-
-      if (args.price < 0) {
-        throw new Error("Price cannot be negative");
-      }
-
-      venue.name = args.name;
-      venue.location = args.location;
-      venue.capacity = args.capacity;
-      venue.price = args.price;
-      venue.description = args.description;
-      venue.image = args.image;
-      venue.isFeatured = args.isFeatured === true;
-
-      if (args.vendorId) {
-        const vendor = await userRepository.findOne({
-          where: {
-            id: Number(args.vendorId),
-            role: UserRole.VENDOR,
+        const savedVenue = await venueRepository.save(venue);
+        // remove the previous suitabilities before adding new ones
+        await suitabilityRepository.delete({
+          venue: {
+            id: savedVenue.id,
           },
         });
-
-        if (vendor) {
-          venue.vendor = vendor;
-        }
-      }
-
-      const savedVenue = await venueRepository.save(venue);
-      // remove the previous suitabilities before adding new ones
-      await suitabilityRepository.delete({
-        venue: {
-          id: savedVenue.id,
-        },
-      });
-      if (Array.isArray(args.suitabilities)) {
-        let suitabilityCount = 0;
-        for (const suitabilityText of args.suitabilities) {
-          const keyword = suitabilityText.trim();
-          if (keyword.length > 0 && suitabilityCount < 4) {
-            const suitability = new VenueSuitability();
-            suitability.keyword = keyword;
-            suitability.venue = savedVenue;
-            await suitabilityRepository.save(suitability);
-            suitabilityCount++;
+        if (Array.isArray(args.suitabilities)) {
+          let suitabilityCount = 0;
+          for (const suitabilityText of args.suitabilities) {
+            const keyword = suitabilityText.trim();
+            if (keyword.length > 0 && suitabilityCount < 4) {
+              const suitability = new VenueSuitability();
+              suitability.keyword = keyword;
+              suitability.venue = savedVenue;
+              await suitabilityRepository.save(suitability);
+              suitabilityCount++;
+            }
           }
         }
-      }
 
-      return await venueRepository.findOne({
-        where: { id: savedVenue.id },
-        relations: {
-          vendor: true,
-          venueSuitabilities: true,
-        },
+        return await venueRepository.findOne({
+          where: { id: savedVenue.id },
+          relations: {
+            vendor: true,
+            venueSuitabilities: true,
+          },
+        });
       });
     },
-    deleteVenue: async (_: any, { id }: { id: string }) => {
+    deleteVenue: async (_: any, { id }: { id: string }, context: GraphQLContext) => {
+      requireAdmin(context);
       const venueRepository = AppDataSource.getRepository(Venue);
+      if (!positiveId(id)) throw new GraphQLError("Invalid venue ID", { extensions: { code: "BAD_USER_INPUT" } });
       const result = await venueRepository.delete(Number(id));
       return result.affected === 1;
     },

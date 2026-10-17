@@ -3,7 +3,7 @@ import { render, screen } from "@testing-library/react";
 import { ChakraProvider } from "@chakra-ui/react";
 import { ApplicationHistory } from "./ApplicationHistory";
 import { EventApplication } from "../types/EventApplication";
-import { venues } from "@/types/venues";
+import { venues } from "./test-venues";
 
 function renderComponent(ui: React.ReactElement) {
     return render(<ChakraProvider>{ui}</ChakraProvider>);
@@ -22,7 +22,8 @@ describe("ApplicationHistory", () => {
                 },
                 venues: [1, 2],
                 dateApplied: "2026-04-19T10:00:00.000Z",
-                hirerID: "h1",
+                hirerID: 1,
+                hirerEmail: "sample@example.test",
                 status: "approved",
                 approvedVenueID: 2,
             },
@@ -34,7 +35,7 @@ describe("ApplicationHistory", () => {
 
         const approvedVenueText = `${approvedVenue!.name} (${approvedVenue!.location})`;
 
-        renderComponent(<ApplicationHistory applications={applications} />);
+        renderComponent(<ApplicationHistory applications={applications} venues={venues} />);
 
         expect(screen.getByText("Confirmed Venue:")).toBeInTheDocument();
         expect(screen.getAllByText(approvedVenueText)).toHaveLength(2);
@@ -52,12 +53,13 @@ describe("ApplicationHistory", () => {
                 },
                 venues: [1, 5],
                 dateApplied: "2026-04-19T11:00:00.000Z",
-                hirerID: "h2",
+                hirerID: 2,
+                hirerEmail: "sample2@example.test",
                 status: "pending",
             },
         ];
 
-        renderComponent(<ApplicationHistory applications={applications} />);
+        renderComponent(<ApplicationHistory applications={applications} venues={venues} />);
 
         expect(screen.queryByText("Confirmed Venue:")).not.toBeInTheDocument();
     });

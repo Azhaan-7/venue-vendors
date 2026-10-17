@@ -13,7 +13,6 @@ import { Review } from "./entity/Review";
 import { HireHistory } from "./entity/HireHistory";
 import { HirerDocument } from "./entity/HirerDocument";
 import { ApplicationDraft } from "./entity/ApplicationDraft";
-import { application } from "express";
 import { ApplicationDraftVenue } from "./entity/ApplicationDraftVenue";
 import "dotenv/config";
 
@@ -24,14 +23,19 @@ export const AppDataSource = new DataSource({
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
   options: {
-    encrypt: false, // Use this for Azure SQL Database
+    encrypt: true,
+    trustServerCertificate: false, // Use this for Azure SQL Database
     //trustedConnection: false // Use this for Windows Authentication (if applicable)
   },
-  // synchronize: true will automatically create database tables based on entity definitions
-  // and update them when entity definitions change. This is useful during development
-  // but should be disabled in production to prevent accidental data loss.
-  synchronize: true,
-  logging: true, // Enable logging for debugging purposes
+  // Schema changes require a reviewed migration; neither runtime owns DDL.
+  synchronize: false,
+  migrationsRun: false,
+  dropSchema: false,
+  logging: false,
+  invalidWhereValuesBehavior: { null: "throw", undefined: "throw" },
+  connectionTimeout: 15000,
+  requestTimeout: 15000,
+  pool: { max: 5, min: 0, idleTimeoutMillis: 30000 },
   entities: [User, Profile, Venue, VenueSuitability, Application, ApplicationVenue, UploadedDocument, BlockedPeriod, Comment, Review, HireHistory, HirerDocument, ApplicationDraft, ApplicationDraftVenue],
   migrations: [],
   subscribers: [],

@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
-import { Box, Heading, VStack, Text, Spinner } from "@chakra-ui/react";
+import { Box, Heading, VStack, Text, Spinner, Alert, AlertIcon } from "@chakra-ui/react";
 import { useAuth } from "@/context/AuthContext";
 import { authApi } from "@/services/api";
+import { useRouter } from "next/router";
+import { requestError } from "@/utils/requestError";
 
 interface UserProfile {
   id: number;
@@ -12,21 +14,23 @@ interface UserProfile {
 }
 
 export default function Profile() {
-    const { user } = useAuth();
+    const { user, isLoading } = useAuth();
+    const router = useRouter();
     const [profile, setProfile] = useState<UserProfile | null>(null);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState("");
 
     useEffect(() => {
         const fetchProfile = async () => {
             if (!user) return;
 
             setLoading(true);
+            setError("");
             try {
                 const profileData = await authApi.getProfile(user.id);
                 setProfile(profileData);
-                console.log(profileData);
             } catch (error) {
-                console.error(error);
+                setError(requestError(error, "Could not load your profile. Please try again."));
             } finally {
                 setLoading(false);
             }
@@ -35,12 +39,16 @@ export default function Profile() {
         fetchProfile();
     }, [user]);
 
-    if (loading) {
-        return <Spinner />;
+    useEffect(() => {
+        if (!isLoading && !user) void router.replace("/signin");
+    }, [isLoading, router, user]);
+
+    if (isLoading || loading) {
+        return <Spinner display="block" mx="auto" my={12} />;
     }
 
     if (!profile) {
-        return <Text>Profile not found</Text>;
+        return <Alert status="error" my={6}><AlertIcon />{error || "Profile not found"}</Alert>;
     }
 
     return (
