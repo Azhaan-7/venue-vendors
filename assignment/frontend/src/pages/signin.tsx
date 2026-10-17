@@ -1,3 +1,4 @@
+import { requestError } from "@/utils/requestError";
 import { useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useRouter } from "next/router";
@@ -33,6 +34,7 @@ function getPasswordErrors(password: string): string[] {
 }
 
 export default function SignIn() {
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [emailError, setEmailError] = useState("");
@@ -41,7 +43,7 @@ export default function SignIn() {
   const [showSuccess, setShowSuccess] = useState(false);
   const [signedInUser, setSignedInUser] = useState<{ email: string; role: string; name?: string } | null>(null);
 
-  const { signIn } = useAuth();
+  const { signIn, signOut } = useAuth();
   const router = useRouter();
 
   const validate = (): boolean => {
@@ -71,21 +73,32 @@ export default function SignIn() {
 
     if (!validate()) return;
 
+    setIsSubmitting(true);
+    try {
     const user = await signIn(email, password);
 
     if (user) {
+      if (user.role !== "hirer" && user.role !== "vendor") {
+        await signOut();
+        setShowSuccess(false);
+        setAuthError("Administrator accounts must use the admin sign-in page.");
+        return;
+      }
       setSignedInUser(user);
       setShowSuccess(true);
       setTimeout(() => {
         if (user.role === "hirer") {
           router.push("/hirer");
-        } else {
+        } else if (user.role === "vendor") {
           router.push("/vendor");
         }
       }, 1500);
     } else {
       setAuthError("Incorrect email or password. Please try again.");
     }
+    } catch (error) {
+      setAuthError(requestError(error, "Unable to sign in. Check your connection and try again."));
+    } finally { setIsSubmitting(false); }
   };
 
   return (
@@ -99,12 +112,12 @@ export default function SignIn() {
       </Head>
 
       <Box
-        minH="100vh"
+        minH={{ base: "auto", md: "65vh" }}
         display="flex"
         alignItems="center"
         justifyContent="center"
         bg="gray.50"
-        px={4}
+        px={4} py={{ base: 8, md: 10 }}
       >
         <Box
           bg="white"
@@ -187,7 +200,7 @@ export default function SignIn() {
 
               {/* Submit button */}
               <Button
-                type="submit"
+                type="submit" isLoading={isSubmitting} loadingText="Signing in"
                 colorScheme="blue"
                 w="full"
                 mt={2}

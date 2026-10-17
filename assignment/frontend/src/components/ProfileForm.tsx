@@ -3,21 +3,23 @@ import { Box, VStack, FormControl, FormLabel, Input, Button, Heading, FormErrorM
 import { Profile, UploadedFile } from "../types/profiles";
 import { useToast } from "@chakra-ui/react";
 import { validateProfile } from "@/types/profileValidation";
+import { requestError } from "@/utils/requestError";
 import { hirerDocumentApi } from "@/services/api";
 
 type ProfileFormProps = {
     profile: Profile;
     setProfile: React.Dispatch<React.SetStateAction<Profile>>;
-    saveProfile: (updatedProfile: Profile) => void;
+    saveProfile: (updatedProfile: Profile) => Promise<void>;
     email: string;
     userId: number;
 };
 
 // Profile form for hirers.
 // This component allows the user to update profile details,
-// upload user documents, apply as a business, and view calculated credibility score.
+// upload sample documents, apply as a business, and view the server-maintained credibility score.
 export function ProfileForm({ profile, setProfile, saveProfile, email, userId }: ProfileFormProps) {
     const toast = useToast();
+    const [isSaving, setIsSaving] = useState(false);
     // File input refs are used to clear the selected filename properly
     // when an uploaded file is removed from the form
     const driverLicenseRef = useRef<HTMLInputElement | null>(null);
@@ -33,38 +35,12 @@ export function ProfileForm({ profile, setProfile, saveProfile, email, userId }:
     }>({});
     type DocumentType = "driverLicense" | "publicLiabilityInsurance" | "businessRegistration";
     const [removedDocuments, setRemovedDocuments] = useState<DocumentType[]>([]);
-    // Credibility score is based on how many compliant documents are uploaded
-    // Driver's license and insurance contribute for all hirers,
-    // but business registration only contributes for business applications
-    // The final score is scaled to a value out of 5
-    function calculateCredibilityScore(updatedProfile: Profile): number {
-        let score = 0;
-
-        if (updatedProfile.driverLicense) {
-            score++;
-        }
-
-        if (updatedProfile.publicLiabilityInsurance) {
-            score++;
-        }
-
-        if (updatedProfile.isBusiness && updatedProfile.businessRegistration) {
-            score++;
-        }
-
-        const maxUploads = updatedProfile.isBusiness ? 3 : 2;
-        const totalScore = (score / maxUploads) * 5;
-
-        return Number(totalScore.toFixed(1));
-    }
-
-
     type HirerDocument = {
         id: number;
         documentType: DocumentType;
         fileName: string;
         mimeType: string;
-        fileData: string;
+        downloadUrl: string;
     };
 
     useEffect(() => {
@@ -76,25 +52,27 @@ export function ProfileForm({ profile, setProfile, saveProfile, email, userId }:
 
                 documents.forEach((doc: HirerDocument) => {
                     const documentType: DocumentType = doc.documentType;
+                    if (!["driverLicense", "publicLiabilityInsurance", "businessRegistration"].includes(documentType)) return;
 
                     updatedProfile[documentType] = {
                         name: doc.fileName,
                         type: doc.mimeType,
                         size: 0,
-                        data: doc.fileData,
+                        data: doc.downloadUrl,
                     };
                 });
 
-                updatedProfile.credibilityScore = calculateCredibilityScore(updatedProfile);
 
                 return updatedProfile;
             });
         }
 
         if (userId) {
-            loadDocuments();
+            void loadDocuments().catch((error) => {
+                toast({ title: "Documents could not be loaded.", description: requestError(error, "Please try again."), status: "error", isClosable: true });
+            });
         }
-    }, [userId, setProfile]);
+    }, [userId, setProfile, toast]);
 
     function fileUpload(
         e: React.ChangeEvent<HTMLInputElement>,
@@ -142,8 +120,7 @@ export function ProfileForm({ profile, setProfile, saveProfile, email, userId }:
         }
         const reader = new FileReader();
 
-        // Once the file is read, save its details and content in a format
-        // that can be stored in localStorage as part of the profile.
+        // Keep a newly selected document in memory until it is uploaded.
         reader.onload = async () => {
             const uploadedFile: UploadedFile = {
                 name: selectedFile.name,
@@ -157,7 +134,6 @@ export function ProfileForm({ profile, setProfile, saveProfile, email, userId }:
                 [field]: uploadedFile,
             };
 
-            updatedProfile.credibilityScore = calculateCredibilityScore(updatedProfile);
 
             setRemovedDocuments((prev) => prev.filter((documentType) => documentType !== field));
 
@@ -171,14 +147,13 @@ export function ProfileForm({ profile, setProfile, saveProfile, email, userId }:
 
         reader.readAsDataURL(selectedFile);
     }
-    //Removing uploaded file and recalculating the credibility score
+    // Remove a selected or persisted document when the profile is saved.
     function removeFile(field: "driverLicense" | "publicLiabilityInsurance" | "businessRegistration") {
         const updatedProfile = {
             ...profile,
             [field]: undefined,
         } as Profile;
 
-        updatedProfile.credibilityScore = calculateCredibilityScore(updatedProfile);
         setProfile(updatedProfile);
 
         setRemovedDocuments((prev) => {
@@ -207,6 +182,7 @@ export function ProfileForm({ profile, setProfile, saveProfile, email, userId }:
         if (Object.keys(validationErrors).length > 0) {
             return;
         }
+        setIsSaving(true);
         try {
             for (const documentType of removedDocuments) {
                 await hirerDocumentApi.deleteDocument(userId, documentType);
@@ -219,16 +195,17 @@ export function ProfileForm({ profile, setProfile, saveProfile, email, userId }:
             for (const documentType of documentFields) {
                 const document = profile[documentType];
 
-                if (document) {
-                    await hirerDocumentApi.uploadDocument(userId, {
+                if (document?.data.startsWith("data:")) {
+                    const uploaded = await hirerDocumentApi.uploadDocument(userId, {
                         documentType: documentType,
                         fileName: document.name,
                         mimeType: document.type,
                         fileData: document.data,
                     });
+                    setProfile(previous => ({ ...previous, [documentType]: { ...document, data: uploaded.downloadUrl } }));
                 }
             }
-            saveProfile(profile);
+            await saveProfile(profile);
             setRemovedDocuments([]);
             toast({
                 title: "Profile saved.",
@@ -239,15 +216,18 @@ export function ProfileForm({ profile, setProfile, saveProfile, email, userId }:
             });
         } catch (error) {
             toast({
-                title: "Profile could not be saved.",
+                title: "Profile changes could not be fully saved.",
+                description: requestError(error, "Some document changes may already be saved. Please review and try again."),
                 status: "error",
                 duration: 3000,
                 isClosable: true,
             });
+        } finally {
+            setIsSaving(false);
         }
     }
     return (
-        <Box p={6} borderWidth="1px" borderRadius="lg">
+        <Box p={{ base: 4, md: 6 }} borderWidth="1px" borderRadius="lg" bg="white">
             <Heading size={"md"} mb={4}>Your Profile</Heading>
             <VStack spacing={4}>
                 <FormControl isInvalid={!!errors.name}>
@@ -289,8 +269,9 @@ export function ProfileForm({ profile, setProfile, saveProfile, email, userId }:
                     />
                     <FormErrorMessage>{errors.phone}</FormErrorMessage>
                 </FormControl>
+                <Text fontSize="sm">Portfolio demonstration only. Upload sample documents; do not upload real identity documents.</Text>
                 <FormControl isInvalid={!!errors.driverLicense}>
-                    <FormLabel>Driver's License (JPG)</FormLabel>
+                    <FormLabel>Driver&apos;s License (JPG)</FormLabel>
                     <Input
                         ref={driverLicenseRef}
                         type="file"
@@ -344,7 +325,6 @@ export function ProfileForm({ profile, setProfile, saveProfile, email, userId }:
                                 businessRegistration: checked ? profile.businessRegistration : undefined,
                             };
 
-                            updatedProfile.credibilityScore = calculateCredibilityScore(updatedProfile);
                             setProfile(updatedProfile);
 
                             if (!checked) {
@@ -409,6 +389,7 @@ export function ProfileForm({ profile, setProfile, saveProfile, email, userId }:
                 <Button
                     colorScheme="blue"
                     onClick={saveProfileWithDocuments}
+                    isLoading={isSaving} loadingText="Saving profile"
                 >
                     Save Profile
                 </Button>

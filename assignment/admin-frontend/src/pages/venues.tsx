@@ -1,8 +1,10 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/router";
 import { gql } from "@apollo/client";
 import { useQuery, useMutation } from "@apollo/client/react";
-import { Box, Button, Heading, Text, VStack, Table, Thead, Tbody, Tr, Th, Td, Spinner, HStack, Input, Select, Textarea, useToast, Checkbox } from "@chakra-ui/react";
+import { Box, Button, Heading, Text, VStack, Table, Thead, Tbody, Tr, Th, Td, Spinner, HStack, Input, Select, Textarea, useToast, Checkbox, FormControl, FormLabel, SimpleGrid, TableContainer, Alert, AlertIcon } from "@chakra-ui/react";
+import { requestError } from "@/utils/requestError";
+import { useRequireAdmin } from "@/hooks/useRequireAdmin";
 
 type VenueSuitability = {
   id: string;
@@ -50,8 +52,8 @@ const emptyForm = {
 };
 
 const GET_VENUES = gql`
-  query GetVenues {
-    venues {
+  query GetVenues($venueOffset: Int!, $vendorOffset: Int!) {
+    venues(limit: 100, offset: $venueOffset) {
       id
       name
       location
@@ -69,7 +71,7 @@ const GET_VENUES = gql`
         keyword
       }
     }
-    vendors {
+    vendors(limit: 100, offset: $vendorOffset) {
       id
       email
     }
@@ -142,22 +144,20 @@ const DELETE_VENUE = gql`
 //removed set  message for toast
 export default function Venues() {
   const router = useRouter();
+  const { isAdmin, isCheckingAuth } = useRequireAdmin();
+  const [venueOffset, setVenueOffset] = useState(0);
+  const [vendorOffset, setVendorOffset] = useState(0);
   const [form, setForm] = useState(emptyForm);
   const [isEditing, setIsEditing] = useState(false);
-  const { data, loading, error, refetch } = useQuery<VenuesData>(GET_VENUES);
+  const { data, loading, error, refetch } = useQuery<VenuesData>(GET_VENUES, {
+    skip: !isAdmin,
+    variables: { venueOffset, vendorOffset },
+  });
 
-  const [createVenue] = useMutation(CREATE_VENUE);
-  const [updateVenue] = useMutation(UPDATE_VENUE);
+  const [createVenue, { loading: creating }] = useMutation(CREATE_VENUE);
+  const [updateVenue, { loading: updating }] = useMutation(UPDATE_VENUE);
   const [deleteVenue] = useMutation(DELETE_VENUE);
   const toast = useToast();
-
-  useEffect(() => {
-    const isAdminLoggedIn = localStorage.getItem("adminLoggedIn");
-
-    if (isAdminLoggedIn !== "true") {
-      router.push("/signin");
-    }
-  }, [router]);
 
   const handleChange = (field: string, value: string) => {
     setForm({
@@ -263,12 +263,12 @@ export default function Venues() {
       }
 
       clearForm();
-      await refetch();
-    } catch (error: any) {
+      await refetch().catch(error => toast({ title: "Venue saved. List could not refresh.", description: requestError(error, "Please reload the page."), status: "warning", isClosable: true }));
+    } catch (error) {
       toast({
         title: "Save failed.",
         description:
-          error.message || "The venue couldn't be saved.",
+          requestError(error, "The venue couldn't be saved."),
         status: "error",
         duration: 3000,
         isClosable: true,
@@ -296,11 +296,11 @@ export default function Venues() {
         duration: 3000,
         isClosable: true,
       });
-      await refetch();
-    } catch {
+      await refetch().catch(error => toast({ title: "Venue deleted. List could not refresh.", description: requestError(error, "Please reload the page."), status: "warning", isClosable: true }));
+    } catch (error) {
       toast({
         title: "Delete failed.",
-        description: "Venue couldn't be deleted.",
+        description: requestError(error, "Venue couldn't be deleted."),
         status: "error",
         duration: 3000,
         isClosable: true,
@@ -308,8 +308,12 @@ export default function Venues() {
     }
   };
 
+  if (isCheckingAuth || !isAdmin) {
+    return <Spinner display="block" mx="auto" mt={12} />;
+  }
+
   return (
-    <Box maxW="1200px" mx="auto" mt={10} p={6}>
+    <Box maxW="1200px" mx="auto" py={{ base: 6, md: 10 }} px={{ base: 4, md: 6 }}>
       <VStack align="stretch" spacing={5}>
         <Box>
           <Heading>Manage Venues</Heading>
@@ -318,63 +322,68 @@ export default function Venues() {
             Admin can add, edit, delete, feature, and assign vendors to venues.
           </Text>
         </Box>
-        <Box borderWidth="1px" borderRadius="lg" p={5}>
+        <Box borderWidth="1px" borderRadius="lg" p={{ base: 4, md: 5 }} bg="white" minW={0}>
           <Heading size="md" mb={3}>
             {isEditing ? "Edit Venue" : "Add Venue"}
           </Heading>
 
           <VStack align="stretch" spacing={3}>
-            <Input
+            <FormControl isRequired><FormLabel>Venue name</FormLabel><Input
               placeholder="Venue name"
               value={form.name}
               onChange={(e) => handleChange("name", e.target.value)}
-            />
+            /></FormControl>
 
-            <Input
+            <FormControl isRequired><FormLabel>Location</FormLabel><Input
               placeholder="Location"
               value={form.location}
               onChange={(e) => handleChange("location", e.target.value)}
-            />
+            /></FormControl>
 
-            <HStack>
-              <Input
+            <HStack align="start">
+              <FormControl isRequired><FormLabel>Capacity</FormLabel><Input
                 placeholder="Capacity"
                 type="number"
                 value={form.capacity}
                 onChange={(e) => handleChange("capacity", e.target.value)}
-              />
+              /></FormControl>
 
-              <Input
+              <FormControl isRequired><FormLabel>Price ($)</FormLabel><Input
                 placeholder="Price"
                 type="number"
                 value={form.price}
                 onChange={(e) => handleChange("price", e.target.value)}
-              />
+              /></FormControl>
             </HStack>
 
-            <Textarea
+            <FormControl isRequired><FormLabel>Description</FormLabel><Textarea
               placeholder="Description"
               value={form.description}
               onChange={(e) => handleChange("description", e.target.value)}
-            />
+            /></FormControl>
 
-            <Input
+            <FormControl isRequired><FormLabel>Image URL</FormLabel><Input
               placeholder="Image URL"
               value={form.image}
               onChange={(e) => handleChange("image", e.target.value)}
-            />
+            /></FormControl>
 
-            <Select
+            <FormControl isRequired><FormLabel>Vendor</FormLabel><Select
               placeholder="Assign vendor"
               value={form.vendorId}
               onChange={(e) => handleChange("vendorId", e.target.value)}
             >
+              {form.vendorId && !data?.vendors.some(vendor => vendor.id === form.vendorId) && <option value={form.vendorId}>Selected vendor</option>}
               {data?.vendors.map((vendor) => (
                 <option key={vendor.id} value={vendor.id}>
                   {vendor.email}
                 </option>
               ))}
-            </Select>
+            </Select></FormControl>
+            <HStack flexWrap="wrap" gap={2} spacing={0}>
+              <Button size="sm" isDisabled={vendorOffset === 0 || loading} onClick={() => setVendorOffset(value => Math.max(0, value - 100))}>Previous vendors</Button>
+              <Button size="sm" isDisabled={loading || (data?.vendors.length ?? 0) < 100} onClick={() => setVendorOffset(value => value + 100)}>Next vendors</Button>
+            </HStack>
             <Checkbox
               isChecked={form.isFeatured}
               onChange={(e) =>
@@ -387,34 +396,34 @@ export default function Venues() {
               Featured Venue
             </Checkbox>
 
-            <HStack>
-              <Input
+            <SimpleGrid columns={{ base: 2, md: 4 }} spacing={3}>
+              <FormControl><FormLabel>Suitability 1</FormLabel><Input
                 placeholder="Suitability 1"
                 value={form.suitability1}
                 onChange={(event) => handleChange("suitability1", event.target.value)}
-              />
+              /></FormControl>
 
-              <Input
+              <FormControl><FormLabel>Suitability 2</FormLabel><Input
                 placeholder="Suitability 2"
                 value={form.suitability2}
                 onChange={(event) => handleChange("suitability2", event.target.value)}
-              />
+              /></FormControl>
 
-              <Input
+              <FormControl><FormLabel>Suitability 3</FormLabel><Input
                 placeholder="Suitability 3"
                 value={form.suitability3}
                 onChange={(event) => handleChange("suitability3", event.target.value)}
-              />
+              /></FormControl>
 
-              <Input
+              <FormControl><FormLabel>Suitability 4</FormLabel><Input
                 placeholder="Suitability 4"
                 value={form.suitability4}
                 onChange={(event) => handleChange("suitability4", event.target.value)}
-              />
-            </HStack>
+              /></FormControl>
+            </SimpleGrid>
 
-            <HStack>
-              <Button onClick={saveVenue}>
+            <HStack flexWrap="wrap" gap={2} spacing={0}>
+              <Button onClick={saveVenue} isLoading={creating || updating} loadingText="Saving">
                 {isEditing ? "Update Venue" : "Create Venue"}
               </Button>
 
@@ -427,21 +436,24 @@ export default function Venues() {
           </VStack>
         </Box>
 
-        <Box borderWidth="1px" borderRadius="lg" p={5}>
+        <Box borderWidth="1px" borderRadius="lg" p={{ base: 4, md: 5 }} bg="white" minW={0}>
           <Heading size="md" mb={3}>
             Venue Management
           </Heading>
 
-          {loading && <Spinner />}
+          <HStack mb={3} flexWrap="wrap" gap={3} spacing={0}>
+            <Button isDisabled={venueOffset === 0 || loading} onClick={() => setVenueOffset(value => Math.max(0, value - 100))}>Previous venues</Button>
+            <Text>Page {venueOffset / 100 + 1}</Text>
+            <Button isDisabled={loading || (data?.venues.length ?? 0) < 100} onClick={() => setVenueOffset(value => value + 100)}>Next venues</Button>
+          </HStack>
+          {loading && <Text as="div" role="status"><Spinner size="sm" mr={2} />Loading venues…</Text>}
 
           {error && (
-            <Text color="red.500">
-              Failed to load venues from GraphQL.
-            </Text>
+            <Alert status="error" borderRadius="md"><AlertIcon />{requestError(error, "Could not load venues. Please try again.")}</Alert>
           )}
 
           {data && (
-            <Table variant="simple" size="sm">
+            <><Text display={{ base: "block", md: "none" }} fontSize="sm" color="gray.600" mb={2}>Scroll horizontally to view all columns.</Text><TableContainer tabIndex={0} role="region" aria-label="Venue management, scroll horizontally"><Table variant="simple" size="sm" minW="960px">
               <Thead>
                 <Tr>
                   <Th>Name</Th>
@@ -456,6 +468,7 @@ export default function Venues() {
               </Thead>
 
               <Tbody>
+                {data.venues.length === 0 && <Tr><Td colSpan={8} color="gray.600">No venues on this page.</Td></Tr>}
                 {data.venues.map((venue) => (
                   <Tr key={venue.id}>
                     <Td>{venue.name}</Td>
@@ -472,7 +485,7 @@ export default function Venues() {
                     </Td>
                     <Td>{venue.isFeatured ? "Yes" : "No"}</Td>
                     <Td>
-                      <HStack>
+                      <HStack flexWrap="wrap" gap={2} spacing={0}>
                         <Button size="sm" onClick={() => editVenue(venue)}>
                           Edit
                         </Button>
@@ -488,7 +501,7 @@ export default function Venues() {
                   </Tr>
                 ))}
               </Tbody>
-            </Table>
+            </Table></TableContainer></>
           )}
         </Box>
 

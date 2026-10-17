@@ -8,7 +8,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { Profile } from "../types/profiles";
-import { Box, VStack, Text, Input, Alert, AlertIcon, useToast } from "@chakra-ui/react";
+import { Box, VStack, Text, Input, Alert, AlertIcon, useToast, Spinner } from "@chakra-ui/react";
 import { ProfileForm } from "../components/ProfileForm";
 import { VenueList } from "../components/VenueList";
 import { RankingList } from "../components/RankingList";
@@ -22,9 +22,12 @@ import { HirerHistory } from "@/components/hireHistoryComponent";
 import { BlockedPeriod } from "@/types/blockedPeriod";
 import { validateProfile } from "@/types/profileValidation";
 //adding application api, changing applications stored in local storage to instead use api and database
-import { applicationApi, authApi, api, applicationDraftApi } from "@/services/api";
+import { applicationApi, authApi, getCollection, applicationDraftApi } from "@/services/api";
+import { requestError } from "@/utils/requestError";
+import { useRouter } from "next/router";
 export default function Hiring() {
-    const { user } = useAuth();
+    const { user, isLoading } = useAuth();
+    const router = useRouter();
     const toast = useToast();
     // Page-level state is kept here and not in component files because this file coordinates the full hirer
     // workflow and passes smaller pieces of data to the components in src/components
@@ -33,8 +36,6 @@ export default function Hiring() {
     const [venues, setVenues] = useState<Venue[]>([]);
     const [search, setSearch] = useState("");
     const [selectedID, setSelectedID] = useState<number[]>([]);
-    // Used to trigger a toast message when a saved draft is restored.
-    const [restoredDraft, setRestoredDraft] = useState(false);
     //getting hire history from db
     const [hireHistory, setHireHistory] = useState<HireHistory[]>([]);
     //loading blocked periods defined by vendors from db:
@@ -58,6 +59,14 @@ export default function Hiring() {
         duration: 0
     });
     const [errors, setErrors] = useState<string[]>([]);
+    const [loadErrors, setLoadErrors] = useState<Record<string, string>>({});
+    const [venuesLoading, setVenuesLoading] = useState(true);
+
+    useEffect(() => {
+        if (isLoading) return;
+        if (!user) void router.replace("/signin");
+        else if (user.role !== "hirer") void router.replace("/");
+    }, [isLoading, router, user]);
 
 
     useEffect(() => {
@@ -78,14 +87,14 @@ export default function Hiring() {
                     draft.event.duration > 0 ||
                     draft.venues.length > 0
                 ) {
-                    setRestoredDraft(true);
+                    toast({ title: "Welcome back", description: "Your previous event draft has been restored.", status: "success", duration: 3000, isClosable: true });
                 }
-            } catch (err) {
-                console.error("Failed to load application draft:", err);
+            } catch (error) {
+                setLoadErrors(previous => ({ ...previous, draft: requestError(error, "Could not load draft. Please try again.") }));
             }
         }
         loadApplicationDraft();
-    }, [user]);
+    }, [user, toast]);
 
     // Load saved profile data for the current user.
     // A user-specific key ensures each hirer sees only their own profile information.
@@ -96,18 +105,16 @@ export default function Hiring() {
             try {
                 const data = await authApi.getProfile(user.id);
 
-                setProfile({
+                setProfile(previous => ({
+                    ...previous,
                     name: data.name || "",
                     phoneNumber: data.phoneNumber || "",
                     isBusiness: data.isBusiness || false,
                     abn: data.abn || "",
-                    driverLicense: undefined,
-                    publicLiabilityInsurance: undefined,
-                    businessRegistration: undefined,
                     credibilityScore: Number(data.credibilityScore || data.creditabilityScore || 0),
-                });
-            } catch (err) {
-                console.error("Failed to fetch profile:", err);
+                }));
+            } catch (error) {
+                setLoadErrors(previous => ({ ...previous, profile: requestError(error, "Could not load profile. Please try again.") }));
             }
         }
         fetchProfile();
@@ -124,8 +131,8 @@ export default function Hiring() {
             try {
                 const data = await applicationApi.hirerApplications(user.id);
                 setApplications(data);
-            } catch (err) {
-                console.error("Failed to fetch hirer applications:", err);
+            } catch (error) {
+                setLoadErrors(previous => ({ ...previous, applications: requestError(error, "Could not load applications. Please try again.") }));
             }
         }
 
@@ -133,28 +140,15 @@ export default function Hiring() {
     }, [user]);
 
 
-    //Shows a toast notification once after restoring a draft
-    useEffect(() => {
-        if (!restoredDraft) return;
-
-        toast({
-            title: "Welcome back",
-            description: "Your previous event draft has been restored.",
-            status: "success",
-            duration: 3000,
-            isClosable: true,
-        });
-
-        setRestoredDraft(false);
-    }, [restoredDraft, toast]);
     //loading venue from backend
     useEffect(() => {
         const loadVenue = async () => {
             try {
-                const response = await api.get("/venues");
-                setVenues(response.data);
+                setVenues(await getCollection<Venue>("/venues"));
             } catch (error) {
-                console.error("Error loading venues:", error);
+                setLoadErrors(previous => ({ ...previous, venues: requestError(error, "Could not load venues. Please try again.") }));
+            } finally {
+                setVenuesLoading(false);
             }
         };
         loadVenue();
@@ -162,27 +156,27 @@ export default function Hiring() {
     //loading in hire history
     useEffect(() => {
         const loadHireHistory = async () => {
+            if (!user) return;
             try {
-                const response = await api.get("/hire-history");
-                setHireHistory(response.data);
+                setHireHistory(await getCollection<HireHistory>("/hire-history"));
             } catch (error) {
-                console.error("Error loading hire history:", error);
+                setLoadErrors(previous => ({ ...previous, history: requestError(error, "Could not load history. Please try again.") }));
             }
         };
         loadHireHistory();
-    }, []);
+    }, [user]);
     useEffect(() => {
         const loadBlockedPeriods = async () => {
+            if (!user) return;
             try {
-                const response = await api.get("/blocked-periods");
-                setBlockedPeriods(response.data);
+                setBlockedPeriods(await getCollection<BlockedPeriod>("/blocked-periods"));
             } catch (error) {
-                console.error("Error loading blocked periods:", error);
+                setLoadErrors(previous => ({ ...previous, availability: requestError(error, "Could not load availability. Please try again.") }));
             }
         };
 
         loadBlockedPeriods();
-    }, []);
+    }, [user]);
 
     if (!user) {
         return null;
@@ -335,13 +329,16 @@ export default function Hiring() {
             });
 
             setSelectedID([]);
-            await applicationDraftApi.deleteDraft(user.id);
             setErrors([]);
+            try {
+                await applicationDraftApi.deleteDraft(user.id);
+            } catch (error) {
+                toast({ title: "Application submitted; draft cleanup failed.", description: requestError(error, "Your application is saved. The old draft may reappear next time."), status: "warning", isClosable: true });
+            }
 
             return true;
-        } catch (err) {
-            console.error("Failed to submit application:", err);
-            setErrors(["Application could not be submitted"]);
+        } catch (error) {
+            setErrors([requestError(error, "Application could not be submitted. Please try again.")]);
             return false;
         }
     }
@@ -378,8 +375,9 @@ export default function Hiring() {
 
 
     return (
-        <Box p={6}>
+        <Box px={{ base: 4, md: 6 }} py={{ base: 6, md: 8 }}>
             <VStack spacing={6} align="stretch">
+                {Object.entries(loadErrors).map(([key, message]) => <Alert key={key} status="error" borderRadius="md"><AlertIcon />{message}</Alert>)}
 
                 <ProfileForm
                     profile={profile}
@@ -388,17 +386,13 @@ export default function Hiring() {
                     userId={user.id}
                     saveProfile={async (updatedProfile) => {
                         if (!user) return;
-                        try {
-                            await authApi.updateProfile(user.id, {
-                                name: updatedProfile.name,
-                                phoneNumber: updatedProfile.phoneNumber,
-                                isBusiness: updatedProfile.isBusiness,
-                                abn: updatedProfile.abn,
-                                credibilityScore: updatedProfile.credibilityScore,
-                            });
-                        } catch (err) {
-                            console.error("Failed to save profile:", err);
-                        }
+                        const saved = await authApi.updateProfile(user.id, {
+                            name: updatedProfile.name,
+                            phoneNumber: updatedProfile.phoneNumber,
+                            isBusiness: updatedProfile.isBusiness,
+                            abn: updatedProfile.abn,
+                        });
+                        setProfile(previous => ({ ...previous, credibilityScore: Number(saved.creditabilityScore || 0) }));
                     }}
                 />
 
@@ -415,9 +409,8 @@ export default function Hiring() {
                         try {
                             await applicationDraftApi.saveDraft(user.id, event, selectedID);
                             return true;
-                        } catch (err) {
-                            console.error("Failed to save application draft:", err);
-                            setErrors(["Application draft could not be saved. Please try again."]);
+                        } catch (error) {
+                            setErrors([requestError(error, "Application draft could not be saved. Please try again.")]);
                             return false;
                         }
                     }}
@@ -438,17 +431,19 @@ export default function Hiring() {
                         </Box>
                     </Alert>
                 )}
-                <Text fontSize="sm" color="gray.500">
+                <Text fontSize="sm" color="gray.600">
                     You can search using a combination of multiple terms including venue name, location, minimum capacity, or suitability.
                     Example: 150 Corporate Events
                 </Text>
                 <Input
-                    placeholder={`Search venues:`}
+                    aria-label="Search venues"
+                    placeholder="Search venues"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)} />
-                {noSearchMatch && <Text>No venues found.</Text>}
+                {venuesLoading && <Text as="div" role="status"><Spinner size="sm" mr={2} />Loading venues…</Text>}
+                {!venuesLoading && !loadErrors.venues && noSearchMatch && <Text>No venues found.</Text>}
 
-                {!noSearchMatch && (
+                {!venuesLoading && !loadErrors.venues && !noSearchMatch && (
                     <>
                         {featuredVenues.length > 0 && (
                             <>
@@ -486,12 +481,12 @@ export default function Hiring() {
                     moveUp={moveUp}
                     moveDown={moveDown}
                 />
-                <ApplicationHistory
+                {!loadErrors.applications && <ApplicationHistory
                     applications={orderedApplications}
-                    venues={venues} />
-                <HirerHistory
+                    venues={venues} />}
+                {!loadErrors.history && <HirerHistory
                     history={hireHistory.filter(h => user && h.hirer.id === user.id)}
-                />
+                />}
 
             </VStack>
         </Box>

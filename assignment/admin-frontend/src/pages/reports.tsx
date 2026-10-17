@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { useRouter } from "next/router";
 import { gql } from "@apollo/client";
 import { useQuery } from "@apollo/client/react";
@@ -8,6 +7,9 @@ import {
   Button,
   Heading,
   Spinner,
+  TableContainer,
+  Alert,
+  AlertIcon,
   Table,
   Tbody,
   Td,
@@ -17,6 +19,8 @@ import {
   Tr,
   VStack,
 } from "@chakra-ui/react";
+import { useRequireAdmin } from "@/hooks/useRequireAdmin";
+import { requestError } from "@/utils/requestError";
 
 type PopularVenueReport = {
   venueId: string;
@@ -62,17 +66,10 @@ const GET_ADMIN_REPORTS = gql`
 
 export default function Reports() {
   const router = useRouter();
+  const { isAdmin, isCheckingAuth } = useRequireAdmin();
 
   const { data, loading, error } =
-    useQuery<ReportsData>(GET_ADMIN_REPORTS);
-
-  useEffect(() => {
-    const isAdminLoggedIn = localStorage.getItem("adminLoggedIn");
-
-    if (isAdminLoggedIn !== "true") {
-      router.push("/signin");
-    }
-  }, [router]);
+    useQuery<ReportsData>(GET_ADMIN_REPORTS, { skip: !isAdmin });
 
   const downloadReport = () => {
     if (!data) {
@@ -138,8 +135,12 @@ export default function Reports() {
     pdf.save("admin-reports.pdf");
   };
 
+  if (isCheckingAuth || !isAdmin) {
+    return <Spinner display="block" mx="auto" mt={12} />;
+  }
+
   return (
-    <Box maxW="1100px" mx="auto" mt={10} p={6}>
+    <Box maxW="1100px" mx="auto" py={{ base: 6, md: 10 }} px={{ base: 4, md: 6 }}>
       <VStack align="stretch" spacing={6}>
         <Box>
           <Heading>Reports</Heading>
@@ -148,21 +149,21 @@ export default function Reports() {
           </Text>
         </Box>
 
-        {loading && <Spinner />}
+        {loading && <Text as="div" role="status"><Spinner size="sm" mr={2} />Loading reports…</Text>}
 
         {error && (
-          <Text color="red.500">
-            Could not load reports.
-          </Text>
+          <Alert status="error" borderRadius="md"><AlertIcon />{requestError(error, "Could not load reports. Please try again.")}</Alert>
         )}
 
         {data && (
           <>
-            <Box borderWidth="1px" borderRadius="lg" p={5}>
+            <Box borderWidth="1px" borderRadius="lg" p={{ base: 4, md: 5 }} bg="white" minW={0}>
               <Heading size="md" mb={3}>
                 Top 3 Popular Venues
               </Heading>
 
+              <Text display={{ base: "block", md: "none" }} fontSize="sm" color="gray.600" mb={2}>Scroll horizontally to view all columns.</Text>
+              <TableContainer tabIndex={0} role="region" aria-label="Popular venues report, scroll horizontally">
               <Table variant="simple" size="sm">
                 <Thead>
                   <Tr>
@@ -174,6 +175,7 @@ export default function Reports() {
                 </Thead>
 
                 <Tbody>
+                  {data.adminReports.popularVenues.length === 0 && <Tr><Td colSpan={4} color="gray.600">No venue bookings to report yet.</Td></Tr>}
                   {data.adminReports.popularVenues.map((venue) => (
                     <Tr key={venue.venueId}>
                       <Td>{venue.venueName}</Td>
@@ -184,13 +186,16 @@ export default function Reports() {
                   ))}
                 </Tbody>
               </Table>
+              </TableContainer>
             </Box>
 
-            <Box borderWidth="1px" borderRadius="lg" p={5}>
+            <Box borderWidth="1px" borderRadius="lg" p={{ base: 4, md: 5 }} bg="white" minW={0}>
               <Heading size="md" mb={3}>
                 Top 3 Active Applicants
               </Heading>
 
+              <Text display={{ base: "block", md: "none" }} fontSize="sm" color="gray.600" mb={2}>Scroll horizontally to view all columns.</Text>
+              <TableContainer tabIndex={0} role="region" aria-label="Active applicants report, scroll horizontally">
               <Table variant="simple" size="sm">
                 <Thead>
                   <Tr>
@@ -201,6 +206,7 @@ export default function Reports() {
                 </Thead>
 
                 <Tbody>
+                  {data.adminReports.activeApplicants.length === 0 && <Tr><Td colSpan={3} color="gray.600">No applicant activity to report yet.</Td></Tr>}
                   {data.adminReports.activeApplicants.map((applicant) => (
                     <Tr key={applicant.hirerId}>
                       <Td>{applicant.hirerEmail}</Td>
@@ -210,6 +216,7 @@ export default function Reports() {
                   ))}
                 </Tbody>
               </Table>
+              </TableContainer>
             </Box>
 
             <Button onClick={downloadReport}>

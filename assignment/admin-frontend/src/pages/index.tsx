@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { useRouter } from "next/router";
 import {
   Box,
@@ -7,26 +6,34 @@ import {
   SimpleGrid,
   Text,
   VStack,
+  Spinner,
+  useToast,
 } from "@chakra-ui/react";
+import { useAuth } from "@/context/AuthContext";
+import { useRequireAdmin } from "@/hooks/useRequireAdmin";
+import { requestError } from "@/utils/requestError";
 
 export default function AdminDashboard() {
   const router = useRouter();
+  const { signOut } = useAuth();
+  const toast = useToast();
+  const { isAdmin, isCheckingAuth } = useRequireAdmin();
 
-  useEffect(() => {
-    const isAdminLoggedIn = localStorage.getItem("adminLoggedIn");
-
-    if (isAdminLoggedIn !== "true") {
-      router.push("/signin");
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      await router.push("/signin");
+    } catch (error) {
+      toast({ title: "Could not sign out", description: requestError(error, "Please try again."), status: "error", isClosable: true });
     }
-  }, [router]);
-
-  const handleSignOut = () => {
-    localStorage.removeItem("adminLoggedIn");
-    router.push("/signin");
   };
 
+  if (isCheckingAuth || !isAdmin) {
+    return <Spinner display="block" mx="auto" mt={12} />;
+  }
+
   return (
-    <Box maxW="1100px" mx="auto" mt={10} p={6}>
+    <Box maxW="1100px" mx="auto" py={{ base: 6, md: 10 }} px={{ base: 4, md: 6 }}>
       <VStack align="stretch" spacing={6}>
         <Box>
           <Heading>Admin Dashboard</Heading>
@@ -36,7 +43,7 @@ export default function AdminDashboard() {
         </Box>
 
         <SimpleGrid columns={{ base: 1, md: 2 }} spacing={5}>
-          <Box borderWidth="1px" borderRadius="lg" p={5}>
+          <Box borderWidth="1px" borderRadius="lg" p={5} bg="white">
             <Heading size="md" mb={3}>
               Manage Venues
             </Heading>
@@ -49,7 +56,7 @@ export default function AdminDashboard() {
           </Box>
 
 
-          <Box borderWidth="1px" borderRadius="lg" p={5}>
+          <Box borderWidth="1px" borderRadius="lg" p={5} bg="white">
             <Heading size="md" mb={3}>
               Reports
             </Heading>

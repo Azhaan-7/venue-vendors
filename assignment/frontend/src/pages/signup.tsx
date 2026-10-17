@@ -1,3 +1,4 @@
+import { requestError } from "@/utils/requestError";
 import { useState } from "react";
 import { useRouter } from "next/router";
 import {Box,Button,FormControl,FormLabel,FormErrorMessage,Heading,Input,Select,VStack,Alert,AlertIcon,Text,} from "@chakra-ui/react";
@@ -31,6 +32,7 @@ export default function SignUp() {
   const [passwordErrors, setPasswordErrors] = useState<string[]>([]);
   const [serverError, setServerError] = useState("");
   const [success, setSuccess] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const validate = () => {
     let valid = true;
@@ -61,28 +63,30 @@ export default function SignUp() {
 
     if (!validate()) return;
 
+    setIsSubmitting(true);
     try {
       await authApi.signUp({name,email,password,role,});
       setSuccess(true);
       setTimeout(() => {
         router.push("/signin");}, 1500);
 
-    } catch (error: any) {
+    } catch (error) {
       setServerError(
-        error.response?.data?.message ||
-        "Signup failed"
+        requestError(error, "Unable to create your account. Check your connection and try again.")
       );
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   return (
     <Box
-      minH="100vh"
+      minH={{ base: "auto", md: "65vh" }}
       display="flex"
       alignItems="center"
       justifyContent="center"
       bg="gray.50"
-      px={4}>
+      px={4} py={8}>
       <Box
         bg="white"
         p={8}
@@ -134,7 +138,7 @@ export default function SignUp() {
               </Select>
             </FormControl>
 
-            <Button type="submit" colorScheme="blue" w="full">Sign Up</Button>
+            <Button isLoading={isSubmitting} loadingText="Creating account" isDisabled={success} type="submit" colorScheme="blue" w="full">Sign Up</Button>
           </VStack>
         </form>
       </Box>

@@ -1,37 +1,20 @@
 import "reflect-metadata";
-import express from "express";
 import { AppDataSource } from "./data-source";
-import userRoutes from "./routes/userRoutes";
-import profileRoutes from "./routes/profileRoutes";
-import cors from "cors";
-//api for applications
-import applicationRoutes from "./routes/applicationRoutes";
-import blockedPeriodRoutes from "./routes/blockedPeriodRoutes";
-import hireHistoryRoutes from "./routes/hireHistoryRoutes";
-import venueRoutes from "./routes/venueRoutes";
-import hirerDocumentRoutes from "./routes/HirerDocumentRoutes";
-import applicationDraftRoutes from "./routes/applicationDraftRoutes";
-const app = express();
-const PORT = process.env.PORT || 3001;
+import { createApp } from "./app";
+import { positiveInteger, validateStartupEnvironment } from "./config";
 
-app.use(cors());
-app.use(express.json({ limit: "10mb" }));
-app.use("/api", hireHistoryRoutes);
-app.use("/api", userRoutes);
-app.use("/api", profileRoutes);
-app.use("/api", applicationRoutes);
-app.use("/api", blockedPeriodRoutes);
-app.use("/api", venueRoutes);
-app.use("/api", hirerDocumentRoutes);
-app.use("/api", applicationDraftRoutes);
+export async function startServer() {
+  // Configuration failures name variables only, never their values.
+  validateStartupEnvironment();
+  const app = createApp();
+  try { await AppDataSource.initialize(); }
+  catch { throw new Error("Database initialization failed. Check connectivity, TLS, firewall and credentials; details suppressed."); }
+  const server = app.listen(positiveInteger("PORT", 3001, 65535), "0.0.0.0");
+  server.on("error", () => { console.error("HTTP listener failed"); process.exitCode = 1; });
+  return server;
+}
 
-AppDataSource.initialize()
-  .then(() => {
-    console.log("Data Source has been initialized!");
-    app.listen(PORT, () => {
-      console.log(`Server is running on port ${PORT}`);
-    });
-  })
-  .catch((error) =>
-    console.log("Error during Data Source initialization:", error)
-  );
+if (require.main === module) startServer().catch(error => {
+  console.error(error.message);
+  process.exitCode = 1;
+});

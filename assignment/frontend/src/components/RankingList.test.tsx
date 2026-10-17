@@ -2,7 +2,7 @@ import React from "react";
 import { render, screen } from "@testing-library/react";
 import { ChakraProvider } from "@chakra-ui/react";
 import { RankingList } from "./RankingList";
-import { venues } from "../types/venues";
+import { venues } from "./test-venues";
 
 function renderComponent(ui: React.ReactElement) {
   return render(<ChakraProvider>{ui}</ChakraProvider>);

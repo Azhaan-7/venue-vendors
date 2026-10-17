@@ -1,7 +1,6 @@
 import React from "react";
 import { VStack, HStack, Button, Text, Box, Heading } from "@chakra-ui/react";
 import { Venue } from "@/types/venues";
-import Head from "next/head";
 
 type RankingListProps = {
     selectedVenues: Venue[];
@@ -27,6 +26,7 @@ export function RankingList ({ selectedVenues, moveUp, moveDown} : RankingListPr
                         borderWidth={"1px"}
                         borderRadius={"md"}
                         justify={"space-between"}
+                        flexWrap="wrap" gap={3} bg="white"
                         >
                             <Text>
                                 {index+1}. {venue.name}
