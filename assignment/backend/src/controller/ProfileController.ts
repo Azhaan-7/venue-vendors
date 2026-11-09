@@ -1,3 +1,5 @@
+import { validatePhone } from "../utils/validation";
+import { savedCompleteness } from "../security/completeness";
 import { Request, Response } from "express";
 import { AppDataSource } from "../data-source";
 import { Profile } from "../entity/Profile";
@@ -31,16 +33,8 @@ export class ProfileController {
             return response.status(400).json({ message: "Phone number is required" });
         }
 
-        if (!/^[+\d\s]+$/.test(phoneNumber)) {
-            return response.status(400).json({ message: "Phone number can only contain digits, spaces, and +" });
-        }
-
-        if (phoneNumber.replace(/\s/g, "").length < 8) {
-            return response.status(400).json({ message: "Phone number is too short" });
-        }
-
-        if (phoneNumber.replace(/\s/g, "").length > 12) {
-            return response.status(400).json({ message: "Phone number is too long" });
+        if (!validatePhone(phoneNumber)) {
+            return response.status(400).json({ message: "Phone number must contain 8 to 12 digits, spaces and an optional leading +" });
         }
 
         if (isBusiness && abn === "") {
@@ -69,7 +63,7 @@ export class ProfileController {
         }
         const updated = await this.profileRepository.save(profile);
 
-        return response.json(updated);
+        return response.json({ ...updated, creditabilityScore: await savedCompleteness(userId, updated) });
     }
 
     async getProfile(request: Request, response: Response) {
@@ -97,7 +91,7 @@ export class ProfileController {
             phoneNumber: profile.phoneNumber,
             isBusiness: profile.isBusiness,
             abn: profile.abn,
-            creditabilityScore: profile.creditabilityScore,
+            creditabilityScore: await savedCompleteness(userId, profile),
             email: profile.user.email,
             role: profile.user.role,
             dateJoined: profile.user.dateJoined,

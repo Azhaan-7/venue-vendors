@@ -754,7 +754,7 @@ export default function Vendor() {
                     cursor="pointer" _hover={{ borderColor: "blue.300", shadow: "md" }} onClick={() => handleSelectApplication(app)} transition="all 0.2s">
                     <HStack justify="space-between" mb={3} flexWrap="wrap" gap={3}>
                       <VStack align="start" spacing={0}>
-                        <Heading size="sm" color="gray.700">{profile.name || app.hirerID}</Heading>
+                        <Heading size="sm" color="gray.700">{app.hirerName || profile.name || app.hirerID}</Heading>
                         <Text fontSize="sm" color="gray.600">{email}</Text>
                       </VStack>
                       <HStack>

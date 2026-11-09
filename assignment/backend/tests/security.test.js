@@ -31,14 +31,17 @@ test("database metadata is safe and both data-source import and app import are o
   await assert.rejects(() => AppDataSource.initialize(), /forbidden/);
 });
 
-test("profile updates preserve server reputation and default it only for a new profile", async () => {
+test("profile updates ignore client scores and return saved profile completeness", async () => {
+  const original = AppDataSource.getRepository;
+  AppDataSource.getRepository = () => ({ find: async () => [] });
   const controller = new ProfileController();
   for (const existing of [{ userId: 1, creditabilityScore: 1.5 }, null]) {
     controller.profileRepository = { findOne: async () => existing, create: data => ({ creditabilityScore: 0, ...data }), save: async data => data };
     const res = recorder();
     await controller.update({ params: { id: "1" }, body: { name: "Sample", phoneNumber: "0400000000", isBusiness: false, credibilityScore: 5, creditabilityScore: 5 } }, res);
-    assert.equal(res.body.creditabilityScore, existing ? 1.5 : 0);
+    assert.equal(res.body.creditabilityScore, 2);
   }
+  AppDataSource.getRepository = original;
 });
 
 test("legacy or malformed stored passwords fail with a generic 401", async () => {
@@ -173,14 +176,19 @@ test("vendor application responses retain complete preference order and exclude 
   const { ApplicationController } = require("../dist/controller/ApplicationController");
   const controller = new ApplicationController();
   const own = { id: 11, vendor: { id: 7 } }, other = { id: 22, vendor: { id: 8 } };
-  const fixture = { id: 31, hirer: { id: 1, email: "sample@example.test" }, comments: [], applicationVenues: [{ rankOrder: 2, venue: own }, { rankOrder: 1, venue: other }] };
+  const fixture = { id: 31, hirer: { id: 1, email: "sample@example.test", profile: { name: "Sample Hirer", phoneNumber: "0400000000" } }, comments: [], applicationVenues: [{ rankOrder: 2, venue: own }, { rankOrder: 1, venue: other }] };
   const eligible = { select() { return this; }, innerJoin() { return this; }, where() { return this; }, getQuery: () => "SELECT eligible.id FROM application eligible", getParameters: () => ({ vendorId: 7 }) };
   const query = { where(sql) { assert.match(sql, /application.id IN/); return this; }, setParameters(params) { assert.equal(params.vendorId, 7); return this; }, setFindOptions(options) { assert.equal(options.where, undefined, "loading must not filter the preference join"); return this; }, getMany: async () => [fixture, { ...fixture, id: 32, applicationVenues: [{ rankOrder: 1, venue: other }] }] };
   controller.applicationRepository = { createQueryBuilder: alias => alias === "eligible" ? eligible : query };
   const res = recorder();
+  const original = AppDataSource.getRepository;
+  AppDataSource.getRepository = () => ({ find: async () => [] });
+  try {
   await controller.getVendorApplications({ params: { vendorId: "7" }, query: {} }, res);
+  } finally { AppDataSource.getRepository = original; }
   assert.deepEqual(res.body.map(application => application.id), [31]);
   assert.deepEqual(res.body[0].venues, [22, 11]);
+  assert.equal(res.body[0].hirerName, "Sample Hirer");
 });
 
 test("event and venue validation bounds database work before writes", () => {

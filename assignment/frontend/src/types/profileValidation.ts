@@ -11,13 +11,13 @@ export type ProfileValidationErrors = {
 // Rules:
 // 1) Name is required.
 // 2) Phone number is required.
-// 3) Phone number may contain digits, spaces, and + only.
-// 4) Phone number must be between 8 and 12 characters after spaces are removed.
+// 3) Phone number may contain digits, spaces, and one optional leading +.
+// 4) Phone number must contain 8 to 12 digits.
 // 5) ABN is required only when applying as a business.
 // 6) ABN must contain numbers only.
 // 7) ABN must be exactly 11 digits.
 // Compliant documents are not mandatory for submission.
-// Instead, missing documents reduce the credibility score, which can be 0/5.
+// Profile completeness is calculated by the server from saved details and document presence.
 
 
 // File-specific validation (e.g, file type and size) is handled separately in ProfileForm.tsx during upload
@@ -33,15 +33,14 @@ export function validateProfile(profile: Profile): ProfileValidationErrors {
 
     if (phone === "") {
         errors.phone = "Phone number is required";
-    } else if (!/^[+\d\s]+$/.test(phone)) {
-        // Regex ensures only digits, spaces, and + are allowed
-        errors.phone = "Phone number can only contain digits, spaces, and +";
-        // phone.replace(/\s/g, "").length removes all whitespaces in string and returns length
-    } else if (phone.replace(/\s/g, "").length < 8) {
+    } else if (!/^\+?\d[\d\s]*$/.test(phone) || phone.length > 20) {
+        errors.phone = "Phone number may contain digits, spaces and one optional leading +";
+    } else if (phone.replace(/\D/g, "").length < 8) {
         errors.phone = "Phone number is too short";
-    } else if (phone.replace(/\s/g, "").length > 12) {
+    } else if (phone.replace(/\D/g, "").length > 12) {
         errors.phone = "Phone number is too long";
     }
+
 
     if (profile.isBusiness) {
         const abn = profile.abn.trim();

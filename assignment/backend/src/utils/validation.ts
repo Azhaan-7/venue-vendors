@@ -12,3 +12,10 @@ export function validatePassword(password: string): string[] {
     if (!/[@$!%*?&]/.test(password)) errors.push("At least one special character (@$!%*?&)");
     return errors;
 }
+
+export function validatePhone(value: unknown): boolean {
+    if (typeof value !== "string") return false;
+    const phone = value.trim();
+    const digits = phone.replace(/\D/g, "").length;
+    return phone.length <= 20 && /^\+?\d[\d\s]*$/.test(phone) && digits >= 8 && digits <= 12;
+}

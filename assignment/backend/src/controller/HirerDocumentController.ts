@@ -125,7 +125,7 @@ export class HirerDocumentController {
             relations: ["hirer"]
         });
         if (!document) {
-            return response.status(404).json({ message: "Document not found" });
+            return response.json({ message: "Document already removed" });
         }
         await this.documentRepository.remove(document);
         return response.json({ message: "Document deleted successfully" });

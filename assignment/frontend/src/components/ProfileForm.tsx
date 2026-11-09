@@ -16,7 +16,7 @@ type ProfileFormProps = {
 
 // Profile form for hirers.
 // This component allows the user to update profile details,
-// upload sample documents, apply as a business, and view the server-maintained credibility score.
+// upload sample documents, apply as a business, and view server-calculated profile completeness.
 export function ProfileForm({ profile, setProfile, saveProfile, email, userId }: ProfileFormProps) {
     const toast = useToast();
     const [isSaving, setIsSaving] = useState(false);
@@ -129,15 +129,10 @@ export function ProfileForm({ profile, setProfile, saveProfile, email, userId }:
                 data: reader.result as string,
             };
 
-            const updatedProfile: Profile = {
-                ...profile,
-                [field]: uploadedFile,
-            };
-
-
             setRemovedDocuments((prev) => prev.filter((documentType) => documentType !== field));
 
-            setProfile(updatedProfile);
+            // FileReader finishes asynchronously; preserve edits and other completed reads.
+            setProfile(previous => ({ ...previous, [field]: uploadedFile }));
 
             setErrors((prev) => ({
                 ...prev,
@@ -186,6 +181,7 @@ export function ProfileForm({ profile, setProfile, saveProfile, email, userId }:
         try {
             for (const documentType of removedDocuments) {
                 await hirerDocumentApi.deleteDocument(userId, documentType);
+                setRemovedDocuments(previous => previous.filter(type => type !== documentType));
             }
             const documentFields: DocumentType[] = [
                 "driverLicense",
@@ -327,6 +323,9 @@ export function ProfileForm({ profile, setProfile, saveProfile, email, userId }:
 
                             setProfile(updatedProfile);
 
+                            if (!checked && profile.businessRegistration) {
+                                setRemovedDocuments(previous => previous.includes("businessRegistration") ? previous : [...previous, "businessRegistration"]);
+                            }
                             if (!checked) {
                                 setErrors((prev) => ({
                                     ...prev,
@@ -381,7 +380,7 @@ export function ProfileForm({ profile, setProfile, saveProfile, email, userId }:
                     </>
                 )}
                 <HStack alignSelf="flex-start">
-                    <Text fontWeight="semibold">Credibility Score:</Text>
+                    <Text fontWeight="semibold">Profile completeness:</Text>
                     <Badge colorScheme="purple" fontSize="0.9em" px={2} py={1}>
                         {profile.credibilityScore} / 5
                     </Badge>

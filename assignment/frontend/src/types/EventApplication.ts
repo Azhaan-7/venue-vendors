@@ -13,6 +13,7 @@ export type EventApplication = {
     dateApplied: string;
     hirerID: number;
     hirerEmail: string;
+    hirerName?: string;
     status: "pending" | "approved" | "rejected";
     rating?: number;
     comment?: string;

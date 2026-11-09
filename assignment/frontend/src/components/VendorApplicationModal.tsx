@@ -325,7 +325,7 @@ export default function VendorApplicationModal({
                               )}
                               <Box p={3} rounded="md" bg="gray.100">
                                 <HStack justify="space-between">
-                                  <Text fontSize="sm" fontWeight="bold">Credibility Score</Text>
+                                  <Text fontSize="sm" fontWeight="bold">Profile completeness</Text>
                                   <Text fontSize="sm" px={3} py={1}>{hirerProfile.credibilityScore ?? 0} / 5</Text>
                                 </HStack>
                               </Box>

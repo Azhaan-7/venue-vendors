@@ -1,3 +1,4 @@
+import { savedCompleteness } from "../security/completeness";
 import { HttpError } from "../utils/HttpError";
 import { Request, Response } from "express";
 import { AppDataSource } from "../data-source";
@@ -180,7 +181,7 @@ export class ApplicationController {
 
     async getAll(request: Request, response: Response) {
         const applications = await this.applicationRepository.find({ ...pagination(request), relations: ["hirer", "hirer.profile", "applicationVenues", "applicationVenues.venue", "comments", "approvedVenue"] });
-        const formatApplication = applications.map(app => ({
+        const formatApplication = await Promise.all(applications.map(async app => ({
             id: app.id,
             event: {
                 eventName: app.eventName,
@@ -195,11 +196,12 @@ export class ApplicationController {
             dateApplied: app.dateApplied,
             hirerID: app.hirer.id,
             hirerEmail: app.hirer.email,
+                hirerName: app.hirer.profile?.name || app.hirer.email,
             status: app.status,
             approvedVenueID: app.approvedVenue?.id,
             comment: app.comments.length > 0 ? app.comments[app.comments.length - 1].commentText : "",
-            reputationScore: app.hirer.profile?.creditabilityScore || 0,
-        }));
+            reputationScore: await savedCompleteness(app.hirer.id, app.hirer.profile),
+        })));
         response.json(formatApplication);
     }
 
@@ -378,6 +380,10 @@ export class ApplicationController {
                 )
             );
 
+            const scores = new Map<number, number>();
+            for (const app of vendorApplications) {
+                if (!scores.has(app.hirer.id)) scores.set(app.hirer.id, await savedCompleteness(app.hirer.id, app.hirer.profile));
+            }
             const formattedApplications = vendorApplications.map(app => ({
                 id: app.id,
                 event: {
@@ -394,6 +400,7 @@ export class ApplicationController {
                 dateApplied: app.dateApplied,
                 hirerID: app.hirer.id,
                 hirerEmail: app.hirer.email,
+                hirerName: app.hirer.profile?.name || app.hirer.email,
                 status: app.status,
                 approvedVenueID: app.approvedVenue?.id,
 
@@ -403,7 +410,7 @@ export class ApplicationController {
                         : "",
 
                 reputationScore:
-                    app.hirer.profile?.creditabilityScore || 0,
+                    scores.get(app.hirer.id) || 0,
             }));
 
             return response.json(formattedApplications);

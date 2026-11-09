@@ -33,6 +33,12 @@ describe("validateProfile", () => {
 
     const errors = validateProfile(profile);
 
-    expect(errors.phone).toBe("Phone number can only contain digits, spaces, and +");
+    expect(errors.phone).toBe("Phone number may contain digits, spaces and one optional leading +");
   });
+});
+
+test("phone numbers require digits and permit only one leading plus", () => {
+  const base = { name: "Sample", phoneNumber: "", isBusiness: false, abn: "", credibilityScore: 0 };
+  for (const phoneNumber of ["++++++++", "1234+5678", "++12345678"]) expect(validateProfile({ ...base, phoneNumber }).phone).toBeDefined();
+  expect(validateProfile({ ...base, phoneNumber: "+61 400 000 000" }).phone).toBeUndefined();
 });
