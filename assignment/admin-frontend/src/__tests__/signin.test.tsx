@@ -45,7 +45,7 @@ describe("Admin sign in", () => {
     fireEvent.submit(screen.getByRole("button", { name: "Sign In" }).closest("form")!);
 
     expect(await screen.findByText("Please enter a valid email address.")).toBeInTheDocument();
-    expect(screen.getByText("• At least 6 characters")).toBeInTheDocument();
+    expect(screen.getByText("• Password is required.")).toBeInTheDocument();
     expect(signIn).not.toHaveBeenCalled();
   });
 
@@ -60,6 +60,25 @@ describe("Admin sign in", () => {
 
     expect(await screen.findByText("Incorrect email or password. Please try again.")).toBeInTheDocument();
     expect(push).not.toHaveBeenCalled();
+  });
+
+  it.each(["abc", "password", "  abc  "])("submits existing password %j unchanged without signup-strength checks", async password => {
+    signIn.mockResolvedValue({ ok: false, reason: "invalid_credentials" });
+    renderSignIn();
+    fireEvent.change(screen.getByLabelText(/Email Address/), { target: { value: "admin@example.test" } });
+    fireEvent.change(screen.getByLabelText(/Password/), { target: { value: password } });
+    fireEvent.submit(screen.getByRole("button", { name: "Sign In" }).closest("form")!);
+    expect(await screen.findByText("Incorrect email or password. Please try again.")).toBeInTheDocument();
+    expect(signIn).toHaveBeenCalledWith("admin@example.test", password);
+  });
+
+  it("rejects oversized passwords instead of truncating or submitting them", async () => {
+    renderSignIn();
+    fireEvent.change(screen.getByLabelText(/Email Address/), { target: { value: "admin@example.test" } });
+    fireEvent.change(screen.getByLabelText(/Password/), { target: { value: "a".repeat(129) } });
+    fireEvent.submit(screen.getByRole("button", { name: "Sign In" }).closest("form")!);
+    expect(await screen.findByText("• Password must be 128 characters or fewer.")).toBeInTheDocument();
+    expect(signIn).not.toHaveBeenCalled();
   });
 
   it("rejects an authenticated non-admin user", async () => {

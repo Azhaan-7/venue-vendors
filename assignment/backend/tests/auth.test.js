@@ -56,6 +56,42 @@ test("signin returns sanitized data and establishes a valid HttpOnly session", a
   assert.deepEqual(verifySessionToken(decodeURIComponent(token)), { id: 9, role: UserRole.HIRER });
 });
 
+test("signin verifies an existing short password's hash without applying signup strength rules", async () => {
+  const password = "abc";
+  const user = { id: 9, email: "h@example.test", password: await argon2.hash(password), role: UserRole.HIRER };
+  const controller = new UserController();
+  controller.userRepository = { findOne: async options => { assert.equal(options.where.email, user.email); return user; } };
+  const accepted = responseRecorder();
+  await controller.signIn({ body: { email: user.email, password } }, accepted);
+  assert.equal(accepted.statusCode, 200);
+  assert.match(accepted.headers["set-cookie"], /HttpOnly/);
+  for (const wrong of ["abd", "  abc  "]) {
+    const rejected = responseRecorder();
+    await controller.signIn({ body: { email: user.email, password: wrong } }, rejected);
+    assert.equal(rejected.statusCode, 401);
+    assert.equal(rejected.headers["set-cookie"], undefined);
+  }
+});
+
+test("signin rejects missing and oversized passwords before database work", async () => {
+  const controller = new UserController();
+  controller.userRepository = { findOne: () => assert.fail("invalid input must not reach the database") };
+  for (const password of [undefined, "", "a".repeat(129)]) {
+    const rejected = responseRecorder();
+    await controller.signIn({ body: { email: "h@example.test", password } }, rejected);
+    assert.equal(rejected.statusCode, 400);
+  }
+});
+
+test("signup still enforces password strength before database work", async () => {
+  const controller = new UserController();
+  controller.userRepository = { findOne: () => assert.fail("weak signup password must not reach the database") };
+  const rejected = responseRecorder();
+  await controller.signUp({ body: { name: "Sample", email: "h@example.test", password: "abc", role: "hirer" } }, rejected);
+  assert.equal(rejected.statusCode, 400);
+  assert.ok(rejected.body.errors.includes("At least 6 characters"));
+});
+
 test("auth/me succeeds for a valid cookie; missing, invalid, and expired sessions fail", async () => {
   const controller = new UserController();
   controller.userRepository = { findOne: async () => ({ id: 3, email: "v@example.com", role: UserRole.VENDOR, profile: { name: "Vendor" }, password: "hidden" }) };

@@ -24,12 +24,8 @@ function isValidEmail(email: string): boolean {
 
 function getPasswordErrors(password: string): string[] {
   const errors: string[] = [];
-  if (password.length < 6) errors.push("At least 6 characters");
-  if (!/[A-Z]/.test(password)) errors.push("At least one uppercase letter");
-  if (!/[a-z]/.test(password)) errors.push("At least one lowercase letter");
-  if (!/\d/.test(password)) errors.push("At least one number");
-  if (!/[@$!%*?&]/.test(password))
-    errors.push("At least one special character (@$!%*?&)");
+  if (!password.length) errors.push("Password is required.");
+  if (password.length > 128) errors.push("Password must be 128 characters or fewer.");
   return errors;
 }
 
