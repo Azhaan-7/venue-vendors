@@ -55,3 +55,6 @@ logs
 
 # Local review archive; may contain private project configuration
 /venue-vendors-review.zip
+
+# Local browser-test evidence and synthetic fixtures
+/output/playwright/

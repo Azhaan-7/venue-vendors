@@ -8,7 +8,7 @@ Use sample accounts and documents for demonstrations; do not upload real identit
 
 ## Key features
 
-- **Hirers:** Manage profiles and supporting documents, search venues, rank preferences, save event drafts, submit applications and review application and hiring history.
+- **Hirers:** Manage profiles, supporting documents and a server-calculated profile-completeness score, search venues, rank preferences, save event drafts, submit applications and review application and hiring history.
 - **Vendors:** Manage venues and blocked periods, review applicant information and documents, approve or reject applications, leave comments and view venue utilisation charts.
 - **Administrators:** Create, edit, delete and feature venues, assign vendors, and view booking and applicant reports with PDF export.
 
@@ -85,6 +85,19 @@ Create hirer and vendor accounts through signup. Admin access requires manual pr
 Run `npm test`, `npm run typecheck` and `npm run build` in each application directory. Both frontends also support `npm run lint` and `npm test -- --runInBand`; the backends have no lint script.
 
 Backend tests use an offline isolation guard, synthetic fixtures and repository stubs. They do not connect to SQL Server or verify the live schema. Builds do not start the APIs. Use a development database for runtime testing.
+
+For opt-in real SQL concurrency checks, start Docker's local Linux engine and run `npm run test:sql` inside `assignment/backend`. On Windows, open Docker Desktop from the Start menu before running the test. The runner uses Microsoft's SQL Server 2022 Developer image, a new loopback-only container with a 3 GB memory limit, generated credentials and synthetic data. It creates only disposable test schemas and removes its container on completion. It does not read database credentials from `.env` or connect to Azure. The 22 checks cover competing approvals, adjacent/overnight events, venue blocks and transaction rollback with `READ_COMMITTED_SNAPSHOT` off and on. This test schema is not a migration baseline for existing databases.
+
+## Current status and limitations
+
+This is a portfolio demonstration, not a production booking service. Use synthetic accounts and sample documents.
+
+- Login bootstrap requests cannot overwrite newer signin/signout state. Authentication has account-based failed-attempt limits alongside public API limits.
+- Opening either frontend sends a background health request to wake its backend services (REST for the main frontend; REST and GraphQL for admin). It runs once per full page load, sends no session credentials, and stops waiting after 70 seconds. Cold starts can still delay the first API call; there is no recurring keep-alive.
+- Booking submissions and approvals check availability on the server. Transaction-held venue locks coordinate approvals and blocked periods; events use Australia/Sydney wall time and half-open intervals, so adjacent bookings are allowed.
+- Profile completeness awards one point each for a saved name, valid phone, licence upload, insurance upload and business-registration upload. It measures presence, not identity verification or hiring reputation. The score is calculated from saved data without a database backfill.
+- Offline regression tests exercise authorization, failure handling, booking decisions, session races and document operations. The separate SQL integration suite verifies actual concurrent SQL Server behavior; Azure schema compatibility and deployed browser flows still need staging verification.
+- A compatible development schema must be prepared separately. A reproducible schema baseline, deployed client-IP verification, document-access retention policy and booking-completion/history workflow remain follow-up work. The historical security review is a point-in-time record, not a production-readiness certification.
 
 ## Deployment
 
