@@ -1,78 +1,18 @@
-import { useRouter } from "next/router";
-import {
-  Box,
-  Button,
-  Heading,
-  SimpleGrid,
-  Text,
-  VStack,
-  Spinner,
-  useToast,
-} from "@chakra-ui/react";
-import { useAuth } from "@/context/AuthContext";
+import NextLink from "next/link";
+import { Box, Button, Flex, Heading, Text, VStack, Spinner } from "@chakra-ui/react";
 import { useRequireAdmin } from "@/hooks/useRequireAdmin";
-import { requestError } from "@/utils/requestError";
 
 export default function AdminDashboard() {
-  const router = useRouter();
-  const { signOut } = useAuth();
-  const toast = useToast();
   const { isAdmin, isCheckingAuth } = useRequireAdmin();
-
-  const handleSignOut = async () => {
-    try {
-      await signOut();
-      await router.push("/signin");
-    } catch (error) {
-      toast({ title: "Could not sign out", description: requestError(error, "Please try again."), status: "error", isClosable: true });
-    }
-  };
-
-  if (isCheckingAuth || !isAdmin) {
-    return <Spinner display="block" mx="auto" mt={12} />;
-  }
-
-  return (
-    <Box maxW="1100px" mx="auto" py={{ base: 6, md: 10 }} px={{ base: 4, md: 6 }}>
-      <VStack align="stretch" spacing={6}>
-        <Box>
-          <Heading>Admin Dashboard</Heading>
-          <Text mt={2}>
-            Manage venues, featured listings, vendor assignments, and reports.
-          </Text>
-        </Box>
-
-        <SimpleGrid columns={{ base: 1, md: 2 }} spacing={5}>
-          <Box borderWidth="1px" borderRadius="lg" p={5} bg="white">
-            <Heading size="md" mb={3}>
-              Manage Venues
-            </Heading>
-            <Text mb={4}>
-              Perform CRUD operations on venues and assign vendors to venues.
-            </Text>
-            <Button width="100%" onClick={() => router.push("/venues")}>
-              Open
-            </Button>
-          </Box>
-
-
-          <Box borderWidth="1px" borderRadius="lg" p={5} bg="white">
-            <Heading size="md" mb={3}>
-              Reports
-            </Heading>
-            <Text mb={4}>
-              View popular venues and active applicant summaries.
-            </Text>
-            <Button width="100%" onClick={() => router.push("/reports")}>
-              Open
-            </Button>
-          </Box>
-        </SimpleGrid>
-
-        <Button alignSelf="flex-start" colorScheme="red" onClick={handleSignOut}>
-          Sign Out
-        </Button>
-      </VStack>
-    </Box>
-  );
+  if (isCheckingAuth || !isAdmin) return <Spinner display="block" mx="auto" mt={12} />;
+  return <Box px={{ base: 4, md: 6 }} py={{ base: 8, md: 12 }}>
+    <Heading as="h1" size="xl">Admin overview</Heading>
+    <Text mt={3} color="gray.600" maxW="65ch">Keep venue listings up to date, assign vendors and review activity. Choose a workspace to get started.</Text>
+    <VStack align="stretch" spacing={0} mt={10} borderTopWidth="1px" borderColor="gray.200">
+      {[{ title: "Venue management", text: "Add and edit spaces, manage featured listings and assign the right vendor.", href: "/venues", action: "Manage venues" }, { title: "Activity reports", text: "Review popular venues and active applicant summaries, or export a PDF report.", href: "/reports", action: "View reports" }].map(item => <Flex key={item.href} py={8} borderBottomWidth="1px" borderColor="gray.200" align="center" justify="space-between" gap={6} flexWrap="wrap">
+        <Box maxW="620px"><Heading as="h2" size="md" mb={3}>{item.title}</Heading><Text color="gray.600">{item.text}</Text></Box>
+        <Button as={NextLink} href={item.href} variant={item.href === "/venues" ? "solid" : "outline"}>{item.action}</Button>
+      </Flex>)}
+    </VStack>
+  </Box>;
 }

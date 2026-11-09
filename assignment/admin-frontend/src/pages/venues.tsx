@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/router";
 import { gql } from "@apollo/client";
 import { useQuery, useMutation } from "@apollo/client/react";
-import { Box, Button, Heading, Text, VStack, Table, Thead, Tbody, Tr, Th, Td, Spinner, HStack, Input, Select, Textarea, useToast, Checkbox, FormControl, FormLabel, SimpleGrid, TableContainer, Alert, AlertIcon } from "@chakra-ui/react";
+import { Box, Flex, Button, Heading, Text, VStack, Table, Thead, Tbody, Tr, Th, Td, Spinner, HStack, Input, Select, Textarea, useToast, Checkbox, FormControl, FormLabel, FormErrorMessage, SimpleGrid, TableContainer, Alert, AlertIcon } from "@chakra-ui/react";
 import { requestError } from "@/utils/requestError";
 import { useRequireAdmin } from "@/hooks/useRequireAdmin";
 
@@ -149,6 +149,12 @@ export default function Venues() {
   const [vendorOffset, setVendorOffset] = useState(0);
   const [form, setForm] = useState(emptyForm);
   const [isEditing, setIsEditing] = useState(false);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const editorHeading = useRef<HTMLHeadingElement>(null);
+  const errorSummary = useRef<HTMLDivElement>(null);
+  useEffect(() => { if (editorOpen) editorHeading.current?.focus(); }, [editorOpen]);
+  useEffect(() => { if (Object.keys(formErrors).length) errorSummary.current?.focus(); }, [formErrors]);
   const { data, loading, error, refetch } = useQuery<VenuesData>(GET_VENUES, {
     skip: !isAdmin,
     variables: { venueOffset, vendorOffset },
@@ -169,6 +175,8 @@ export default function Venues() {
   const clearForm = () => {
     setForm(emptyForm);
     setIsEditing(false);
+    setEditorOpen(false);
+    setFormErrors({});
   };
 
   const editVenue = (venue: Venue) => {
@@ -192,27 +200,15 @@ export default function Venues() {
     });
 
     setIsEditing(true);
+    setEditorOpen(true);
+    setFormErrors({});
   };
 
   const saveVenue = async () => {
-    if (
-      !form.name ||
-      !form.location ||
-      !form.capacity ||
-      !form.price ||
-      !form.description ||
-      !form.image ||
-      !form.vendorId
-    ) {
-      toast({
-        title: "Incomplete Details.",
-        description: "All fields except suitabilities are mandatory.",
-        status: "warning",
-        duration: 3000,
-        isClosable: true,
-      });
-      return;
-    }
+    const required = { name: "Venue name", location: "Location", capacity: "Capacity", price: "Price", description: "Description", image: "Image URL", vendorId: "Vendor" };
+    const missing = Object.fromEntries(Object.entries(required).filter(([field]) => !form[field as keyof typeof form]).map(([field, label]) => [field, `${label} is required.`]));
+    setFormErrors(missing);
+    if (Object.keys(missing).length) return;
     const suitabilities = [
       form.suitability1,
       form.suitability2,
@@ -315,60 +311,60 @@ export default function Venues() {
   return (
     <Box maxW="1200px" mx="auto" py={{ base: 6, md: 10 }} px={{ base: 4, md: 6 }}>
       <VStack align="stretch" spacing={5}>
-        <Box>
-          <Heading>Manage Venues</Heading>
-
-          <Text mt={2}>
-            Admin can add, edit, delete, feature, and assign vendors to venues.
-          </Text>
-        </Box>
-        <Box borderWidth="1px" borderRadius="lg" p={{ base: 4, md: 5 }} bg="white" minW={0}>
-          <Heading size="md" mb={3}>
+        <Flex justify="space-between" align="center" gap={5} flexWrap="wrap">
+          <Box><Heading as="h1">Manage venues</Heading>
+            <Text mt={2} color="gray.600">Keep listings current, assign vendors and choose featured spaces.</Text>
+          </Box>
+          <Button onClick={() => { clearForm(); setEditorOpen(true); }}>Add venue</Button>
+        </Flex>
+        <Box hidden={!editorOpen} borderWidth="1px" borderRadius="lg" p={{ base: 4, md: 5 }} bg="white" minW={0}>
+          <Heading ref={editorHeading} tabIndex={-1} size="md" mb={3}>
             {isEditing ? "Edit Venue" : "Add Venue"}
           </Heading>
 
+          {Object.keys(formErrors).length > 0 && <Box ref={errorSummary} tabIndex={-1} role="alert" mb={4} p={4} bg="red.50" borderRadius="md"><Text fontWeight="bold">Please complete the required fields</Text>{Object.values(formErrors).map(message => <Text key={message}>{message}</Text>)}</Box>}
           <VStack align="stretch" spacing={3}>
-            <FormControl isRequired><FormLabel>Venue name</FormLabel><Input
+            <FormControl isRequired isInvalid={!!formErrors.name}><FormLabel>Venue name</FormLabel><Input
               placeholder="Venue name"
               value={form.name}
               onChange={(e) => handleChange("name", e.target.value)}
-            /></FormControl>
+            /><FormErrorMessage>{formErrors.name}</FormErrorMessage></FormControl>
 
-            <FormControl isRequired><FormLabel>Location</FormLabel><Input
+            <FormControl isRequired isInvalid={!!formErrors.location}><FormLabel>Location</FormLabel><Input
               placeholder="Location"
               value={form.location}
               onChange={(e) => handleChange("location", e.target.value)}
-            /></FormControl>
+            /><FormErrorMessage>{formErrors.location}</FormErrorMessage></FormControl>
 
             <HStack align="start">
-              <FormControl isRequired><FormLabel>Capacity</FormLabel><Input
+              <FormControl isRequired isInvalid={!!formErrors.capacity}><FormLabel>Capacity</FormLabel><Input
                 placeholder="Capacity"
                 type="number"
                 value={form.capacity}
                 onChange={(e) => handleChange("capacity", e.target.value)}
-              /></FormControl>
+              /><FormErrorMessage>{formErrors.capacity}</FormErrorMessage></FormControl>
 
-              <FormControl isRequired><FormLabel>Price ($)</FormLabel><Input
+              <FormControl isRequired isInvalid={!!formErrors.price}><FormLabel>Price ($)</FormLabel><Input
                 placeholder="Price"
                 type="number"
                 value={form.price}
                 onChange={(e) => handleChange("price", e.target.value)}
-              /></FormControl>
+              /><FormErrorMessage>{formErrors.price}</FormErrorMessage></FormControl>
             </HStack>
 
-            <FormControl isRequired><FormLabel>Description</FormLabel><Textarea
+            <FormControl isRequired isInvalid={!!formErrors.description}><FormLabel>Description</FormLabel><Textarea
               placeholder="Description"
               value={form.description}
               onChange={(e) => handleChange("description", e.target.value)}
-            /></FormControl>
+            /><FormErrorMessage>{formErrors.description}</FormErrorMessage></FormControl>
 
-            <FormControl isRequired><FormLabel>Image URL</FormLabel><Input
+            <FormControl isRequired isInvalid={!!formErrors.image}><FormLabel>Image URL</FormLabel><Input
               placeholder="Image URL"
               value={form.image}
               onChange={(e) => handleChange("image", e.target.value)}
-            /></FormControl>
+            /><FormErrorMessage>{formErrors.image}</FormErrorMessage></FormControl>
 
-            <FormControl isRequired><FormLabel>Vendor</FormLabel><Select
+            <FormControl isRequired isInvalid={!!formErrors.vendorId}><FormLabel>Vendor</FormLabel><Select
               placeholder="Assign vendor"
               value={form.vendorId}
               onChange={(e) => handleChange("vendorId", e.target.value)}
@@ -379,7 +375,7 @@ export default function Venues() {
                   {vendor.email}
                 </option>
               ))}
-            </Select></FormControl>
+            </Select><FormErrorMessage>{formErrors.vendorId}</FormErrorMessage></FormControl>
             <HStack flexWrap="wrap" gap={2} spacing={0}>
               <Button size="sm" isDisabled={vendorOffset === 0 || loading} onClick={() => setVendorOffset(value => Math.max(0, value - 100))}>Previous vendors</Button>
               <Button size="sm" isDisabled={loading || (data?.vendors.length ?? 0) < 100} onClick={() => setVendorOffset(value => value + 100)}>Next vendors</Button>
@@ -427,11 +423,7 @@ export default function Venues() {
                 {isEditing ? "Update Venue" : "Create Venue"}
               </Button>
 
-              {isEditing && (
-                <Button variant="outline" onClick={clearForm}>
-                  Cancel
-                </Button>
-              )}
+              <Button variant="outline" onClick={clearForm}>Cancel</Button>
             </HStack>
           </VStack>
         </Box>
