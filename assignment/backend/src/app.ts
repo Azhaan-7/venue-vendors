@@ -9,7 +9,7 @@ import venueRoutes from "./routes/venueRoutes";
 import hirerDocumentRoutes from "./routes/HirerDocumentRoutes";
 import applicationDraftRoutes from "./routes/applicationDraftRoutes";
 import { frontendOrigins } from "./config";
-import { authLimits, configureHttp, originGuard, publicLimits, safeErrorHandler } from "./security/http";
+import { configureHttp, originGuard, publicLimits, safeErrorHandler } from "./security/http";
 import { requireAuth, requireOwnParam, requireRole } from "./middleware/auth";
 import { pagination } from "./security/input";
 import { UserRole } from "./entity/UserRole";
@@ -26,7 +26,6 @@ export function createApp() {
   // The origin guard above continues to protect logout against CSRF.
   app.post("/api/auth/signout", (req, res) => new UserController().signOut(req, res));
   app.use("/api", ...publicLimits());
-  app.use(["/api/auth/signin", "/api/auth/signup"], ...authLimits());
   // Large JSON is accepted only on the authorized upload route, never before auth.
   app.post("/api/hirer-documents/:id", requireAuth, requireRole(UserRole.HIRER), requireOwnParam("id"),
     express.json({ limit: "3mb", inflate: false }));

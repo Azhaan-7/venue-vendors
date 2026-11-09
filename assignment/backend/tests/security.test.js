@@ -143,11 +143,11 @@ test("forged forwarding headers cannot escape REST throttling; auth has a strict
         if (i === 2) assert.equal(res.headers.has("retry-after"), true);
       }
     });
-    process.env.RATE_LIMIT_MAX = "120"; process.env.AUTH_RATE_LIMIT_MAX = "1";
+    process.env.RATE_LIMIT_MAX = "120";
     await listen(createApp(), async url => {
-      for (let i = 0; i < 2; i++) {
-        const res = await fetch(`${url}/api/auth/signin`, { method: "POST", headers: { origin: "http://localhost:3000", "content-type": "application/json" }, body: "{}" });
-        assert.equal(res.status, i ? 429 : 400);
+      for (let i = 0; i < 11; i++) {
+        const res = await fetch(`${url}/api/auth/signin`, { method: "POST", headers: { origin: "http://localhost:3000", "content-type": "application/json" }, body: JSON.stringify({ email: "limit@example.test", password: "" }) });
+        assert.equal(res.status, i === 10 ? 429 : 400);
       }
     });
   } finally { process.env = old; }

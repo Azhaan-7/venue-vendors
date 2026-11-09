@@ -73,8 +73,8 @@ export function rateLimit(options: {
 export function publicLimits() {
   const windowMs = positiveInteger("RATE_LIMIT_WINDOW_SECONDS", 60, 3600) * 1000;
   return [
-    rateLimit({ limit: positiveInteger("RATE_LIMIT_GLOBAL_MAX", 600), windowMs, key: () => "global" }),
     rateLimit({ limit: positiveInteger("RATE_LIMIT_MAX", 120), windowMs }),
+    rateLimit({ limit: positiveInteger("RATE_LIMIT_GLOBAL_MAX", 600), windowMs, key: () => "global" }),
   ];
 }
 

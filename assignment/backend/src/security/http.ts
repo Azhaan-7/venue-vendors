@@ -42,6 +42,7 @@ export function originGuard(allowedOrigins: string[]) {
 // Bounded fixed-window counters. No timers, raw email addresses, or request bodies are retained.
 export function rateLimit(options: {
   limit: number; windowMs: number; key?: (req: Request) => string; now?: () => number; maxKeys?: number;
+  skipSuccessful?: boolean;
 }) {
   const counters = new Map<string, { count: number; reset: number }>();
   const now = options.now || Date.now;
@@ -66,6 +67,12 @@ export function rateLimit(options: {
       res.setHeader("Retry-After", String(Math.max(1, Math.ceil((counter.reset - time) / 1000))));
       return res.status(429).json({ message: "Too many requests. Please try again later." });
     }
+    if (options.skipSuccessful) {
+      const current = counter;
+      res.once("finish", () => {
+        if (res.statusCode < 400 || res.statusCode >= 500) current.count--;
+      });
+    }
     next();
   };
 }
@@ -73,23 +80,33 @@ export function rateLimit(options: {
 export function publicLimits() {
   const windowMs = positiveInteger("RATE_LIMIT_WINDOW_SECONDS", 60, 3600) * 1000;
   return [
-    rateLimit({ limit: positiveInteger("RATE_LIMIT_GLOBAL_MAX", 600), windowMs, key: () => "global" }),
     rateLimit({ limit: positiveInteger("RATE_LIMIT_MAX", 120), windowMs }),
+    rateLimit({ limit: positiveInteger("RATE_LIMIT_GLOBAL_MAX", 600), windowMs, key: () => "global" }),
   ];
 }
 
-export function authLimits() {
-  const windowMs = positiveInteger("AUTH_RATE_LIMIT_WINDOW_SECONDS", 900, 86400) * 1000;
-  return [
-    rateLimit({ limit: positiveInteger("AUTH_RATE_LIMIT_GLOBAL_MAX", 60), windowMs, key: () => "global" }),
-    rateLimit({ limit: positiveInteger("AUTH_RATE_LIMIT_MAX", 10), windowMs }),
-  ];
+// Bound expensive password hashing/verification without a shared timed lockout.
+export function authConcurrencyLimit() {
+  const limit = positiveInteger("AUTH_MAX_CONCURRENT", 4, 32);
+  let active = 0;
+  return (handler: (req: Request, res: Response) => Promise<unknown>) =>
+    async (req: Request, res: Response, next: NextFunction) => {
+      if (active >= limit) {
+        res.setHeader("Retry-After", "1");
+        return res.status(503).json({ message: "Authentication is busy. Please try again shortly." });
+      }
+      active++;
+      try { await handler(req, res); }
+      catch (error) { next(error); }
+      finally { active--; }
+    };
 }
 
 export function accountLimit() {
   return rateLimit({
     limit: positiveInteger("AUTH_RATE_LIMIT_ACCOUNT_MAX", 10),
     windowMs: positiveInteger("AUTH_RATE_LIMIT_WINDOW_SECONDS", 900, 86400) * 1000,
+    skipSuccessful: true,
     key: req => createHash("sha256").update(typeof req.body?.email === "string" ? req.body.email.trim().toLowerCase() : "invalid").digest("hex"),
   });
 }
