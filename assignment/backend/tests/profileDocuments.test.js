@@ -31,6 +31,22 @@ test("deleting an already removed document succeeds for safe retries", async () 
   assert.equal(res.code, 200);
 });
 
+test("hostile and duplicate display names cannot pollute report counters or merge identities", async () => {
+  const controller = new ApplicationController();
+  controller.applicationRepository = { find: async () => [1, 2].map(id => ({
+    id, status: "approved", dateApplied: new Date(), decisionDate: new Date(),
+    hirer: { id, profile: { name: "AuditPollution" } },
+    approvedVenue: { id, name: "__proto__", vendor: { id: 9 } },
+    applicationVenues: [{ venue: { id, name: "__proto__", vendor: { id: 9 } } }],
+  })) };
+  const res = { status(n) { this.code = n; return this; }, json(body) { this.body = body; return this; } };
+  await controller.getVendorStats({ params: { vendorId: "9" }, query: {} }, res);
+  assert.equal(({}).AuditPollution, undefined);
+  assert.deepEqual(Object.values(res.body.hirerActivity), [1, 1]);
+  assert.equal(Object.keys(res.body.venueTallies).length, 2);
+});
+
+
 test("punctuation-only and misplaced plus signs do not earn phone completeness", () => {
   for (const phoneNumber of ["++++++++", "1234+5678", "++12345678"]) {
     assert.equal(completenessScore({ name: "Sample", phoneNumber }, []), 1);

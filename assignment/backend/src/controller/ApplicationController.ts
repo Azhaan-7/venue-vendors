@@ -497,27 +497,27 @@ export class ApplicationController {
             const approvedApp = filteredByDecision.filter(app => app.status === ApplicationStatus.APPROVED && app.approvedVenue?.vendor?.id === VendorId);
 
             // chart 1
-            const venueTallies: Record<string, Record<string, number>> = {};
+            const venueTallies: Record<string, Record<string, number>> = Object.create(null);
             approvedApp.forEach(app => {
-                const venueName = app.approvedVenue?.name || "Unknown Venue";
-                const hirerName = app.hirer.profile?.name || `Hirer ${app.hirer.id}`;
+                const venueName = `${app.approvedVenue?.name || "Unknown Venue"} (#${app.approvedVenue?.id})`;
+                const hirerName = `${app.hirer.profile?.name || "Hirer"} (#${app.hirer.id})`;
                 if (!venueTallies[venueName]) {
-                    venueTallies[venueName] = {};
+                    venueTallies[venueName] = Object.create(null);
                 }
                 venueTallies[venueName][hirerName] = (venueTallies[venueName][hirerName] || 0) + 1;
             });
 
             // chart 2
-            const combinedTallies: Record<string, number> = {};
+            const combinedTallies: Record<string, number> = Object.create(null);
             approvedApp.forEach(app => {
-                const hirerName = app.hirer.profile?.name || `Hirer ${app.hirer.id}`;
+                const hirerName = `${app.hirer.profile?.name || "Hirer"} (#${app.hirer.id})`;
                 combinedTallies[hirerName] = (combinedTallies[hirerName] || 0) + 1;
             });
 
             // chart 3 - all apps filtered by date applied
-            const hirerActivity: Record<string, number> = {};
+            const hirerActivity: Record<string, number> = Object.create(null);
             filteredByCreated.forEach(app => {
-                const hirerName = app.hirer.profile?.name || `Hirer ${app.hirer.id}`;
+                const hirerName = `${app.hirer.profile?.name || "Hirer"} (#${app.hirer.id})`;
                 hirerActivity[hirerName] = (hirerActivity[hirerName] || 0) + 1;
             });
 
@@ -534,7 +534,7 @@ export class ApplicationController {
             }
 
             // chart 4 - venue utilization over time
-            const venueUtilization: Record<string, Record<string, number>> = {};
+            const venueUtilization: Record<string, Record<string, number>> = Object.create(null);
 
             filteredByCreated.forEach(app => {
                 const date = new Date(app.dateApplied);
@@ -550,9 +550,9 @@ export class ApplicationController {
 
                 app.applicationVenues.forEach(av => {
                     if (av.venue.vendor?.id === VendorId) {
-                        const venueName = av.venue.name || "Unknown Venue";
+                        const venueName = `${av.venue.name || "Unknown Venue"} (#${av.venue.id})`;
                         if (!venueUtilization[venueName]) {
-                            venueUtilization[venueName] = {};
+                            venueUtilization[venueName] = Object.create(null);
                         }
                         venueUtilization[venueName][dateKey] = (venueUtilization[venueName][dateKey] || 0) + 1;
                     }
