@@ -16,13 +16,11 @@
   "type": "commonjs",
   "dependencies": {
     "argon2": "^0.44.0",
-    "chart.js": "^4.5.1",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.3",
     "mssql": "^12.5.2",
-    "react-chartjs-2": "^5.3.1",
     "reflect-metadata": "^0.2.2",
     "typeorm": "^0.3.29"
   },
@@ -31,6 +29,7 @@
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^25.7.0",
+    "tedious": "20.3.7",
     "ts-node": "^10.9.2",
     "typescript": "^6.0.3"
   },
