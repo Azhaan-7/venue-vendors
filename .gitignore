@@ -55,3 +55,16 @@ logs
 
 # Local review archive; may contain private project configuration
 /venue-vendors-review.zip
+
+# Private assistant context and internal working notes
+.codex/
+.agents/
+.impeccable/
+AGENTS.md
+PRODUCT.md
+DESIGN.md
+/DEPLOYMENT.md
+/SECURITY_REVIEW.md
+/security_best_practices_report.md
+/output/playwright/
+/venue-vendors-review.zip
