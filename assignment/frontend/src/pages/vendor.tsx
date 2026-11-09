@@ -754,7 +754,7 @@ export default function Vendor() {
                 const email = app.hirerEmail;
 
                 return (
-                  <Box key={index} p={5} bg="white" rounded="xl" shadow="sm" border="1px solid" borderColor="gray.200"
+                  <Box key={index} p={5} bg="white" rounded="xl" border="1px solid" borderColor="gray.200"
                     cursor="pointer" _hover={{ borderColor: "blue.300", shadow: "md" }} onClick={() => handleSelectApplication(app)} transition="all 0.2s">
                     <HStack justify="space-between" mb={3} flexWrap="wrap" gap={3}>
                       <VStack align="start" spacing={0}>
@@ -767,6 +767,7 @@ export default function Vendor() {
                       </HStack>
                     </HStack>
 
+                    <Button size="sm" variant="outline" mb={4} onClick={event => { event.stopPropagation(); handleSelectApplication(app); }}>Review application<span className="sr-only"> for {app.event?.eventName}</span></Button>
                     <Divider mb={3} />
 
                     <HStack spacing={0} gap={6} flexWrap="wrap" align="start">

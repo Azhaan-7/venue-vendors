@@ -16,10 +16,16 @@ test("approval choices keep foreign and blocked venues unselectable", async () =
     getReputation={() => null} isVenueBlocked={id => id === 3} getBlockReason={() => "Unavailable"} getHireHistory={() => []}
     getHistorySummary={() => ({ totalEvents: 0, uniqueLocations: 0, avgRating: "0" })}
   /></ChakraProvider>);
-  await screen.findByText("Select which venue should be approved");
-  const clickLast = (label: string) => { const matches = screen.getAllByText(label); fireEvent.click(matches[matches.length - 1]); };
-  clickLast("Other venue"); clickLast("Blocked venue");
+  const own = await screen.findByRole("button", { name: /Own venue/ });
+  const other = screen.getByRole("button", { name: /Other venue/ });
+  const blocked = screen.getByRole("button", { name: /Blocked venue/ });
+  expect(other).toBeDisabled();
+  expect(blocked).toBeDisabled();
+  expect(own).toBeEnabled();
+  fireEvent.click(other); fireEvent.click(blocked);
   expect(select).not.toHaveBeenCalled();
-  clickLast("Own venue");
+  own.focus();
+  expect(own).toHaveFocus();
+  fireEvent.click(own);
   expect(select).toHaveBeenCalledWith(1);
 });

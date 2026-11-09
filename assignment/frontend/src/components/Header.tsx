@@ -1,9 +1,9 @@
-import { Box, Heading } from "@chakra-ui/react";
+import NextLink from "next/link";
+import { Flex, Link, Text } from "@chakra-ui/react";
 
 export default function Header() {
-    return (
-        <Box bg="blue.600" color="white" px={4} py={{ base: 4, md: 5 }} textAlign="center">
-            <Heading size="lg">Venue Vendors (VV) Web System</Heading>
-        </Box>
-    );
+  return <Flex as="header" maxW="1200px" w="full" mx="auto" px={{ base: 4, md: 6 }} pt={6} pb={3} justify="space-between" align="center" gap={4}>
+    <Link as={NextLink} href="/" fontFamily="heading" fontSize="2xl" fontWeight={400} textDecoration="none">Venue Vendors.</Link>
+    <Text display={{ base: "none", md: "block" }} fontSize="sm" color="gray.600">Spaces for getting together.</Text>
+  </Flex>;
 }

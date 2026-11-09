@@ -6,9 +6,9 @@
 
 
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Profile } from "../types/profiles";
-import { Box, VStack, Text, Input, Alert, AlertIcon, useToast, Spinner } from "@chakra-ui/react";
+import { Box, VStack, Text, Input, Alert, AlertIcon, useToast, Spinner, Heading, Link, HStack } from "@chakra-ui/react";
 import { ProfileForm } from "../components/ProfileForm";
 import { VenueList } from "../components/VenueList";
 import { RankingList } from "../components/RankingList";
@@ -60,6 +60,8 @@ export default function Hiring() {
         duration: 0
     });
     const [errors, setErrors] = useState<string[]>([]);
+    const errorSummary = useRef<HTMLDivElement>(null);
+    useEffect(() => { if (errors.length) errorSummary.current?.focus(); }, [errors]);
     const [loadErrors, setLoadErrors] = useState<Record<string, string>>({});
     const [venuesLoading, setVenuesLoading] = useState(true);
 
@@ -374,8 +376,11 @@ export default function Hiring() {
     return (
         <Box px={{ base: 4, md: 6 }} py={{ base: 6, md: 8 }}>
             <VStack spacing={6} align="stretch">
-                {Object.entries(loadErrors).map(([key, message]) => <Alert key={key} status="error" borderRadius="md"><AlertIcon />{message}</Alert>)}
-
+                <Box><Heading as="h1" size="xl" mb={3}>Plan your gathering</Heading><Text color="gray.600">Find a space, rank your favourites and send your application.</Text>
+                  <HStack mt={4} gap={4} flexWrap="wrap"><Link href="#browse">Browse venues</Link><Link href="#application">Event & shortlist</Link><Link href="#applications">My applications</Link></HStack>
+                </Box>
+                <Box as="details" borderBottomWidth="1px" borderColor="gray.200" pb={3}>
+                  <Box as="summary">Your profile · {Number(profile.credibilityScore || 0)}/5 complete — edit details & documents</Box>
                 <ProfileForm
                     profile={profile}
                     setProfile={setProfile}
@@ -392,42 +397,13 @@ export default function Hiring() {
                         setProfile(previous => ({ ...previous, credibilityScore: Number(saved.creditabilityScore || 0) }));
                     }}
                 />
+                </Box>
+                {Object.entries(loadErrors).map(([key, message]) => <Alert key={key} status="error" borderRadius="md"><AlertIcon />{message}</Alert>)}
 
-                <EventForm
-                    event={event}
-                    setEvent={setEvent}
-                    saveEvent={async () => {
-                        if (!user) return false;
 
-                        if (!validateEventApplication()) {
-                            return false;
-                        }
 
-                        try {
-                            await applicationDraftApi.saveDraft(user.id, event, selectedID);
-                            return true;
-                        } catch (error) {
-                            setErrors([requestError(error, "Application draft could not be saved. Please try again.")]);
-                            return false;
-                        }
-                    }}
-                    applyEvent={applyEvent}
-                />
-                {errors.length > 0 && (
-                    <Alert status="error" borderRadius="lg" alignItems="start">
-                        <AlertIcon mt={1} />
-                        <Box>
-                            <Text fontWeight="bold" mb={1}>
-                                Please fix the following:
-                            </Text>
-                            <VStack align="stretch" spacing={1}>
-                                {errors.map((err) => (
-                                    <Text key={err}>• {err}</Text>
-                                ))}
-                            </VStack>
-                        </Box>
-                    </Alert>
-                )}
+
+                <Heading as="h2" size="lg" id="browse" scrollMarginTop={6}>Find your space</Heading>
                 <Text fontSize="sm" color="gray.600">
                     You can search using a combination of multiple terms including venue name, location, minimum capacity, or suitability.
                     Example: 150 Corporate Events
@@ -468,6 +444,7 @@ export default function Hiring() {
                     </>
                 )}
 
+                <Box id="application" scrollMarginTop={6}>
                 <RankingList
                     selectedVenues={
                         selectedID
@@ -478,6 +455,43 @@ export default function Hiring() {
                     moveUp={moveUp}
                     moveDown={moveDown}
                 />
+                {errors.length > 0 && (
+                    <Alert ref={errorSummary} tabIndex={-1} status="error" borderRadius="lg" alignItems="start">
+                        <AlertIcon mt={1} />
+                        <Box>
+                            <Text fontWeight="bold" mb={1}>
+                                Please fix the following:
+                            </Text>
+                            <VStack align="stretch" spacing={1}>
+                                {errors.map((err) => (
+                                    <Text key={err}>• {err}</Text>
+                                ))}
+                            </VStack>
+                        </Box>
+                    </Alert>
+                )}
+                <EventForm
+                    event={event}
+                    setEvent={setEvent}
+                    saveEvent={async () => {
+                        if (!user) return false;
+
+                        if (!validateEventApplication()) {
+                            return false;
+                        }
+
+                        try {
+                            await applicationDraftApi.saveDraft(user.id, event, selectedID);
+                            return true;
+                        } catch (error) {
+                            setErrors([requestError(error, "Application draft could not be saved. Please try again.")]);
+                            return false;
+                        }
+                    }}
+                    applyEvent={applyEvent}
+                />
+                </Box>
+                <Box id="applications" scrollMarginTop={6}>
                 {!loadErrors.applications && <ApplicationHistory
                     applications={orderedApplications}
                     venues={venues} />}
@@ -485,6 +499,7 @@ export default function Hiring() {
                     history={hireHistory.filter(h => user && h.hirer.id === user.id)}
                 />}
 
+                </Box>
             </VStack>
         </Box>
     );

@@ -15,7 +15,7 @@ export function VenueList({ venues, selected, toggleVenue }: VenueListProps) {
         return <Text>No venues available at the moment</Text>
     }
     return (
-        <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
+        <SimpleGrid columns={{ base: 1, md: 2 }} spacing={6}>
             {venues.map((venue) => {
                 // Checking if current venue is already in selected venues
                 const isSelected = selected.includes(venue.id);
@@ -36,7 +36,8 @@ export function VenueList({ venues, selected, toggleVenue }: VenueListProps) {
                         <Image
                             src={venue.image}
                             alt={venue.name}
-                            h="200px"
+                            h="240px"
+                            loading="lazy"
                             w="100%"
                             objectFit="cover"
                             />
@@ -45,10 +46,10 @@ export function VenueList({ venues, selected, toggleVenue }: VenueListProps) {
                                 <Text fontWeight="bold" fontSize="lg">
                                     {venue.name}
                                 </Text>
-                            <Text>Location: {venue.location}</Text>
-                            <Text>Capacity: {venue.capacity}</Text>
-                            <Text>Price for 1 Day: ${venue.price}</Text>
-                            <Text>Description: {venue.description}</Text>
+                            <Text color="gray.600">{venue.location}</Text>
+                            <Text>Up to {venue.capacity} guests</Text>
+                            <Text fontWeight="bold">${venue.price} / day</Text>
+                            <Text color="gray.600">{venue.description}</Text>
                             <Text fontSize="sm" color="gray.600">
                                 Suitable for: {venue.venueSuitabilities?.map(s => s.keyword).join(", ") || "N/A"}
                             </Text>

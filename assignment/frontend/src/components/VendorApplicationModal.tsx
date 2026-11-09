@@ -151,7 +151,7 @@ export default function VendorApplicationModal({
                           {selectedApplication.venues.map((venueId, index) => {
                             const isBlocked = !canApproveVenue(venueId) || isVenueBlocked(venueId, selectedApplication.event?.date);
                             return (
-                              <Box key={venueId} p={3}
+                              <Box as="button" type="button" key={venueId} p={3} textAlign="left" disabled={isBlocked} aria-pressed={selectedVenueId === venueId} _focusVisible={{ outline: "3px solid", outlineColor: "blue.600", outlineOffset: "2px" }}
                                 rounded="md" border="1px solid"
                                 cursor={isBlocked ? "not-allowed" : "pointer"}
                                 opacity={isBlocked ? 0.6 : 1}
@@ -367,22 +367,8 @@ export default function VendorApplicationModal({
                       </Box>
                     )}
                     <Box p={4} bg="gray.50" rounded="md">
-                      <Heading size="sm" mb={3} color="gray.700">Select which venue should be approved</Heading>
-                      <Text fontSize="sm" color="gray.600" mb={2}>Preference of the Hirer:</Text>
-                      <VStack align="stretch" spacing={2}>
-                        {selectedApplication.venues.map((venueId, index) => (
-                          <Box key={venueId} p={3} bg={selectedVenueId === venueId ? "blue.50" : "white"} rounded="md" border="1px solid" borderColor={selectedVenueId === venueId ? "blue.200" : "gray.300"} cursor={canApproveVenue(venueId) && !isVenueBlocked(venueId, selectedApplication.event.date) ? "pointer" : "not-allowed"} onClick={() => { if (canApproveVenue(venueId) && !isVenueBlocked(venueId, selectedApplication.event.date)) setSelectedVenueId(venueId); }}>
-                            <HStack flexWrap="wrap" gap={2}>
-                              <Badge colorScheme="blue">{index+1}</Badge>
-                              <Text fontSize="sm" fontWeight="bold">{getVenueName(venueId)}</Text>
-                              <Text fontSize="sm" color="gray.600">-{getVenueLocation(venueId)}</Text>
-                              {isVenueBlocked(venueId, selectedApplication.event?.date) && (
-                                <Badge colorScheme="red">VENUE BLOCKED</Badge>
-                              )}
-                            </HStack>
-                          </Box>
-                        ))}
-                      </VStack>
+                      <Heading size="sm" mb={3} color="gray.700">Venue to confirm</Heading>
+                      <Text>{selectedVenueId ? getVenueName(selectedVenueId) : "Choose an available venue in the event details above."}</Text>
                       {!selectedVenueId && (
                         <Text fontSize="sm" color="red.600" mt={2}>Please select a venue to approve.</Text>
                       )}

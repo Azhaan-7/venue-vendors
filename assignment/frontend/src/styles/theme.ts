@@ -1,8 +1,9 @@
 import { extendTheme } from "@chakra-ui/react";
 
-// Keep the existing blue/neutral identity; share control and spacing conventions.
+// Shared interaction conventions, with a distinct palette for this surface.
 export const theme = extendTheme({
-  fonts: { body: "Arial, Helvetica, sans-serif", heading: "Arial, Helvetica, sans-serif" },
+  fonts: { body: "Manrope, sans-serif", heading: "DM Serif Display, Georgia, serif" },
+  colors: { blue: { 50: "#f7ece6", 100: "#efdbcf", 200: "#d8b09b", 300: "#bd896e", 400: "#a76146", 500: "#9b5037", 600: "#843e2b", 700: "#713422", 800: "#59291c", 900: "#3c2119" }, gray: { 50: "#fbf8f3", 100: "#f2ede5", 200: "#e3dbd0", 300: "#c9beb0", 400: "#938779", 500: "#74685a", 600: "#62594e", 700: "#494136", 800: "#29251f", 900: "#1c1915" } },
   styles: {
     global: {
       body: { bg: "gray.50", color: "gray.800", lineHeight: 1.6 },
@@ -14,8 +15,8 @@ export const theme = extendTheme({
     },
   },
   components: {
-    Heading: { baseStyle: { lineHeight: 1.25, fontWeight: 700, letterSpacing: "-0.015em" }, sizes: { xl: { fontSize: { base: "1.75rem", md: "2rem" } }, lg: { fontSize: { base: "1.25rem", md: "1.5rem" } } } },
-    Button: { defaultProps: { colorScheme: "blue" }, baseStyle: { borderRadius: "md", fontWeight: 600, flexShrink: 0 }, sizes: { md: { minH: "44px", px: 5 }, sm: { minH: "36px", px: 3 } } },
+    Heading: { baseStyle: { lineHeight: 1.2, fontWeight: 400, letterSpacing: "-0.015em" }, sizes: { xl: { fontSize: { base: "1.75rem", md: "2rem" } }, lg: { fontSize: { base: "1.25rem", md: "1.5rem" } } } },
+    Button: { variants: { solid: ({ colorScheme }: { colorScheme: string }) => ({ bg: `${colorScheme}.700`, color: "white", _hover: { bg: `${colorScheme}.800`, _disabled: { bg: `${colorScheme}.700` } }, _active: { bg: `${colorScheme}.900` } }) }, defaultProps: { colorScheme: "blue" }, baseStyle: { borderRadius: "8px", fontWeight: 600, flexShrink: 0, _focusVisible: { outline: "3px solid", outlineColor: "blue.600", outlineOffset: "3px", boxShadow: "none" } }, sizes: { md: { minH: "44px", px: 5 }, sm: { minH: "36px", px: 3 } } },
     Input: { defaultProps: { focusBorderColor: "blue.600" }, variants: { outline: { field: { bg: "white", borderColor: "gray.300", _placeholder: { color: "gray.600" } } } } },
     Textarea: { defaultProps: { focusBorderColor: "blue.600" }, variants: { outline: { bg: "white", borderColor: "gray.300", _placeholder: { color: "gray.600" } } } },
     Select: { defaultProps: { focusBorderColor: "blue.600" }, variants: { outline: { field: { bg: "white", borderColor: "gray.300" } } } },
