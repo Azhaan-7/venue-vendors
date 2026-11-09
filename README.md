@@ -37,7 +37,7 @@ Both interfaces proxy browser requests through their own origin. The regular int
 
 ### Prerequisites
 
-Use Node.js **22 or 24**, npm, and a SQL Server / Azure SQL development database with a compatible schema. Startup does not create the database schema; see [DEPLOYMENT.md](DEPLOYMENT.md) for database preparation requirements.
+Use Node.js **22 or 24**, npm, and a SQL Server / Azure SQL development database with a compatible schema. Startup does not create the database schema. Prepare and verify a compatible development schema separately before starting either API; this repository does not yet include a reproducible migration baseline.
 
 ### Environment
 
@@ -78,7 +78,7 @@ Run `npm ci` inside each application directory, then start each application in a
 | `assignment/frontend` | `npm run dev -- --port 3000` |
 | `assignment/admin-frontend` | `npm run dev -- --port 3002` |
 
-Create hirer and vendor accounts through signup. Admin access requires manual provisioning as described in [DEPLOYMENT.md](DEPLOYMENT.md).
+Create hirer and vendor accounts through signup. Admin accounts must be provisioned separately by an authorized database owner in the development environment; public signup does not grant administrator access.
 
 ### Verification
 
@@ -97,11 +97,11 @@ This is a portfolio demonstration, not a production booking service. Use synthet
 - Booking submissions and approvals check availability on the server. Transaction-held venue locks coordinate approvals and blocked periods; events use Australia/Sydney wall time and half-open intervals, so adjacent bookings are allowed.
 - Profile completeness awards one point each for a saved name, valid phone, licence upload, insurance upload and business-registration upload. It measures presence, not identity verification or hiring reputation. The score is calculated from saved data without a database backfill.
 - Offline regression tests exercise authorization, failure handling, booking decisions, session races and document operations. The separate SQL integration suite verifies actual concurrent SQL Server behavior; Azure schema compatibility and deployed browser flows still need staging verification.
-- A compatible development schema must be prepared separately. A reproducible schema baseline, deployed client-IP verification, document-access retention policy and booking-completion/history workflow remain follow-up work. The historical security review is a point-in-time record, not a production-readiness certification.
+- A compatible development schema must be prepared separately. A reproducible schema baseline, deployed client-IP verification, document-access retention policy and booking-completion/history workflow remain follow-up work. This project is not certified for production use.
 
 ## Deployment
 
-See [DEPLOYMENT.md](DEPLOYMENT.md) for Vercel and Render configuration, environment variables, database prerequisites and deployment checks. [SECURITY_REVIEW.md](SECURITY_REVIEW.md) records verification results and known limitations.
+The frontends support Vercel hosting, with the REST and GraphQL APIs hosted separately on Render and connected to Azure SQL. Configure backend origins and secrets in the hosting environment. Hosting an instance also requires a compatible database schema, appropriate database permissions and end-to-end verification; the local test suites do not establish production readiness.
 
 ## Acknowledgments
 

@@ -2,7 +2,7 @@
 
 The hirer and vendor interface, built with Next.js, React, TypeScript and Chakra UI. It uses the REST API through the same-origin `/api` proxy.
 
-See the [root README](../../README.md) for features, environment setup, architecture and verification, and [DEPLOYMENT.md](../../DEPLOYMENT.md) for deployment details.
+See the [root README](../../README.md) for features, environment setup, architecture, verification and hosting considerations.
 
 After configuring `.env.local`, run from this directory:
 
