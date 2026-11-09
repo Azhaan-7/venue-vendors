@@ -9,7 +9,6 @@ import { Venue } from "../entity/Venue";
 
 export class BlockedPeriodController {
     private blockedPeriodRepository = AppDataSource.getRepository(BlockedPeriod);
-    private venueRepository = AppDataSource.getRepository(Venue); 
     
     async getAll(request: Request, response: Response) {
         const blockedPeriods = await this.blockedPeriodRepository.find({

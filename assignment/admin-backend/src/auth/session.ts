@@ -11,7 +11,7 @@ function secret(): string {
   return process.env.JWT_SECRET;
 }
 
-export function verifySessionToken(token: string, now = Date.now()): AuthenticatedUser {
+function verifySessionToken(token: string, now = Date.now()): AuthenticatedUser {
   const payload = jwt.verify(token, secret(), {
     algorithms: ["HS256"],
     clockTimestamp: Math.floor(now / 1000),

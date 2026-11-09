@@ -1,5 +1,5 @@
 export const DOCUMENT_TYPES = ["driverLicense", "publicLiabilityInsurance", "businessRegistration"] as const;
-export const MAX_DOCUMENT_BYTES = 2 * 1024 * 1024;
+const MAX_DOCUMENT_BYTES = 2 * 1024 * 1024;
 
 export function inspectDocument(input: { documentType?: unknown; fileName?: unknown; mimeType?: unknown; fileData?: unknown }) {
   const { documentType, fileName, mimeType, fileData } = input;

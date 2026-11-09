@@ -1,5 +1,4 @@
 import { ErrorRequestHandler, Express, NextFunction, Request, Response } from "express";
-import { createHash } from "node:crypto";
 import { isIP } from "node:net";
 import { positiveInteger } from "../config";
 
@@ -40,7 +39,7 @@ export function originGuard(allowedOrigins: string[]) {
 }
 
 // Bounded fixed-window counters. No timers, raw email addresses, or request bodies are retained.
-export function rateLimit(options: {
+function rateLimit(options: {
   limit: number; windowMs: number; key?: (req: Request) => string; now?: () => number; maxKeys?: number;
 }) {
   const counters = new Map<string, { count: number; reset: number }>();
@@ -76,22 +75,6 @@ export function publicLimits() {
     rateLimit({ limit: positiveInteger("RATE_LIMIT_MAX", 120), windowMs }),
     rateLimit({ limit: positiveInteger("RATE_LIMIT_GLOBAL_MAX", 600), windowMs, key: () => "global" }),
   ];
-}
-
-export function authLimits() {
-  const windowMs = positiveInteger("AUTH_RATE_LIMIT_WINDOW_SECONDS", 900, 86400) * 1000;
-  return [
-    rateLimit({ limit: positiveInteger("AUTH_RATE_LIMIT_GLOBAL_MAX", 60), windowMs, key: () => "global" }),
-    rateLimit({ limit: positiveInteger("AUTH_RATE_LIMIT_MAX", 10), windowMs }),
-  ];
-}
-
-export function accountLimit() {
-  return rateLimit({
-    limit: positiveInteger("AUTH_RATE_LIMIT_ACCOUNT_MAX", 10),
-    windowMs: positiveInteger("AUTH_RATE_LIMIT_WINDOW_SECONDS", 900, 86400) * 1000,
-    key: req => createHash("sha256").update(typeof req.body?.email === "string" ? req.body.email.trim().toLowerCase() : "invalid").digest("hex"),
-  });
 }
 
 export const safeErrorHandler: ErrorRequestHandler = (error, _req, res, _next) => {
