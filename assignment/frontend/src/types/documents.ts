@@ -1,4 +1,4 @@
-export type DocumentType = "driverLicense" | "publicLiabilityInsurance" | "businessRegistration";
+type DocumentType = "driverLicense" | "publicLiabilityInsurance" | "businessRegistration";
 export interface DocumentMetadata {
   id: number;
   documentType: DocumentType;

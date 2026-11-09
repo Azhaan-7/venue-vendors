@@ -1,4 +1,3 @@
-import React from "react";
 import { VStack, HStack, Button, Text, Box, Heading } from "@chakra-ui/react";
 import { Venue } from "@/types/venues";
 

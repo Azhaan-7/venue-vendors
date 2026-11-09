@@ -185,7 +185,6 @@ export default function Hiring() {
     // Toggle venue selection for ranking and event application.
     // Click once to add the venue, and click again to remove it.
     function toggleSelect(id: number) {
-        // console.log(selectedID);
         if (selectedID.includes(id)) {
             setSelectedID(
                 selectedID.filter((v) => v !== id)

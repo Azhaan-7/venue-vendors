@@ -1,4 +1,3 @@
-import React from "react";
 import { SimpleGrid, Card, CardBody, Text, Image, VStack } from "@chakra-ui/react";
 import { Venue } from "@/types/venues";
 type VenueListProps = {
