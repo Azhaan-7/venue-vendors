@@ -218,9 +218,11 @@ test("venue and blocked-period mutations deny other vendors before writing", asy
   const blocked = new BlockedPeriodController();
   blocked.venueRepository = venue.venueRepository;
   blocked.blockedPeriodRepository = { findOne: async () => ({ venue: { vendor: { id: 2 } } }), remove: () => assert.fail("unauthorized write") };
+  AppDataSource.transaction = callback => callback({ getRepository: () => venue.venueRepository });
   const created = recorder();
   await blocked.create({ authUser: { id: 3 }, body: { venueId: 1, startDate: "2026-10-20", endDate: "2026-10-21", reason: "Sample" } }, created);
   assert.equal(created.statusCode, 403);
+  AppDataSource.transaction = originalTransaction;
   const removed = recorder();
   await blocked.remove({ params: { id: "1" }, authUser: { id: 3 } }, removed);
   assert.equal(removed.statusCode, 403);

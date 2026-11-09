@@ -32,6 +32,7 @@ interface ApplicationModalProps {
 
   getStatusColor: (status: string) => string;
   getHirerProfile: (id: number) => Profile;
+  canApproveVenue: (id: number) => boolean;
   getVenueName: (id: number) => string;
   getVenueLocation: (id: number) => string;
   getReputation: (app: EventApplication) => number | null;
@@ -66,6 +67,7 @@ export default function VendorApplicationModal({
   getStatusColor,
   getHirerProfile,
   getVenueName,
+  canApproveVenue,
   getVenueLocation,
   getReputation,
   isVenueBlocked,
@@ -147,7 +149,7 @@ export default function VendorApplicationModal({
                             </Box>
                           )}
                           {selectedApplication.venues.map((venueId, index) => {
-                            const isBlocked = isVenueBlocked((venueId), selectedApplication.event?.date);
+                            const isBlocked = !canApproveVenue(venueId) || isVenueBlocked(venueId, selectedApplication.event?.date);
                             return (
                               <Box key={venueId} p={3}
                                 rounded="md" border="1px solid"
@@ -160,7 +162,7 @@ export default function VendorApplicationModal({
                                   <Badge colorScheme="blue">{index + 1}</Badge>
                                   <Text fontSize="sm" fontWeight="bold">{getVenueName(venueId)}</Text>
                                   <Text fontSize="sm" color="gray.600">— {getVenueLocation(venueId)}</Text>
-                                  {isBlocked ? (
+                                  {!canApproveVenue(venueId) ? <Badge>Other vendor</Badge> : isBlocked ? (
                                     <Badge colorScheme="red">BLOCKED — Cannot Select</Badge>) : selectedVenueId === venueId ? (
                                     <Badge colorScheme="blue">SELECTED</Badge>) : null
                                   }
@@ -193,7 +195,7 @@ export default function VendorApplicationModal({
                           {getVenueName(selectedApplication.venues?.[0])} is blocked for this date —{" "}
                           {getBlockReason(
                             selectedApplication.venues?.[0], selectedApplication.event?.date
-                          )}. Approving will automatically reject this application.
+                          )}. Choose an available venue that you own.
                         </Alert>
                       )}
                     </Box>
@@ -369,7 +371,7 @@ export default function VendorApplicationModal({
                       <Text fontSize="sm" color="gray.600" mb={2}>Preference of the Hirer:</Text>
                       <VStack align="stretch" spacing={2}>
                         {selectedApplication.venues.map((venueId, index) => (
-                          <Box key={venueId} p={3} bg={selectedVenueId === venueId ? "blue.50" : "white"} rounded="md" border="1px solid" borderColor={selectedVenueId === venueId ? "blue.200" : "gray.300"} cursor="pointer" onClick={() => setSelectedVenueId(venueId)}>
+                          <Box key={venueId} p={3} bg={selectedVenueId === venueId ? "blue.50" : "white"} rounded="md" border="1px solid" borderColor={selectedVenueId === venueId ? "blue.200" : "gray.300"} cursor={canApproveVenue(venueId) && !isVenueBlocked(venueId, selectedApplication.event.date) ? "pointer" : "not-allowed"} onClick={() => { if (canApproveVenue(venueId) && !isVenueBlocked(venueId, selectedApplication.event.date)) setSelectedVenueId(venueId); }}>
                             <HStack flexWrap="wrap" gap={2}>
                               <Badge colorScheme="blue">{index+1}</Badge>
                               <Text fontSize="sm" fontWeight="bold">{getVenueName(venueId)}</Text>

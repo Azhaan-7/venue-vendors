@@ -1,4 +1,7 @@
+import { validatePhone } from "../utils/validation";
+import { Profile } from "../entity/Profile";
 import { savedCompleteness } from "../security/completeness";
+import { assertFutureEvent, assertVenueAvailable, bookingInterval } from "../security/booking";
 import { HttpError } from "../utils/HttpError";
 import { Request, Response } from "express";
 import { AppDataSource } from "../data-source";
@@ -70,8 +73,24 @@ export class ApplicationController {
                     throw new HttpError(404, "Hirer not found");
                 }
 
+                const profile = await manager.getRepository(Profile).findOne({ where: { userId: hirerId } });
+                const phone = profile?.phoneNumber?.trim() || "";
+                if (!profile?.name?.trim() || !validatePhone(phone) ||
+                    (profile.isBusiness && !/^\d{11}$/.test(profile.abn || ""))) {
+                    throw new HttpError(400, "Save a complete profile with a valid phone number before applying");
+                }
+                const { start, end } = bookingInterval(eventDate, eventTime, duration);
+                assertFutureEvent(start);
                 const selectedVenues = [];
 
+                // Stable lock order prevents deadlocks for applications ranking multiple venues.
+                const lockedVenues = new Map<number, Venue>();
+                for (const id of [...venues].map(Number).sort((a, b) => a - b)) {
+                    const venue = await venueRepository.findOne({ where: { id }, lock: { mode: "pessimistic_write" } });
+                    if (!venue) throw new HttpError(404, "Selected venue not found");
+                    await assertVenueAvailable(manager, id, start, end);
+                    lockedVenues.set(id, venue);
+                }
                 for (let i = 0; i < venues.length; i++) {
                     const venueId = Number(venues[i]);
 
@@ -79,9 +98,7 @@ export class ApplicationController {
                         throw new HttpError(400, "Invalid venue ID");
                     }
 
-                    const venue = await venueRepository.findOne({
-                        where: { id: venueId },
-                    });
+                    const venue = lockedVenues.get(venueId);
 
                     if (!venue) {
                         throw new HttpError(404, "Selected venue not found");
@@ -163,6 +180,7 @@ export class ApplicationController {
                     time: app.eventTime,
                     duration: app.durationHours,
                 },
+                venueDetails: app.applicationVenues.map(av => ({ id: av.venue.id, name: av.venue.name, location: av.venue.location })),
                 venues: app.applicationVenues
                     .sort((a, b) => a.rankOrder - b.rankOrder)
                     .map((av) => av.venue.id),
@@ -232,7 +250,7 @@ export class ApplicationController {
                 if (!rankedVenue) {
                     throw new HttpError(400, "The approved venue must be ranked on this application");
                 }
-                const venue = await venueRepository.findOne({ where: { id: request.body.venueId }, relations: ["vendor"] });
+                const venue = await venueRepository.findOne({ where: { id: Number(request.body.venueId) }, relations: ["vendor"], lock: { mode: "pessimistic_write" } });
                 if (!venue) {
                     throw new HttpError(404, "Venue not found");
                 }
@@ -240,6 +258,10 @@ export class ApplicationController {
                     throw new HttpError(403, "You can only approve applications for your own venue");
                 }
                 if (application.status !== ApplicationStatus.PENDING) throw new HttpError(409, "Application has already been decided");
+                if (application.guest > venue.capacity) throw new HttpError(409, "Guest count exceeds the venue's current capacity");
+                const { start, end } = bookingInterval(application.eventDate, application.eventTime, application.durationHours);
+                assertFutureEvent(start);
+                await assertVenueAvailable(manager, venue.id, start, end);
                 application.status = ApplicationStatus.APPROVED;
                 application.decisionDate = new Date();
                 application.approvedVenue = venue;
@@ -393,6 +415,7 @@ export class ApplicationController {
                     time: app.eventTime,
                     duration: app.durationHours,
                 },
+                venueDetails: app.applicationVenues.map(av => ({ id: av.venue.id, name: av.venue.name, location: av.venue.location })),
                 venues: app.applicationVenues
                     .sort((a, b) => a.rankOrder - b.rankOrder)
                     .map(av => av.venue.id),

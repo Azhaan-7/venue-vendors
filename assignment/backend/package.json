@@ -8,6 +8,7 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "test": "npm run build && node --require ./tests/offline.cjs --test tests/*.test.js",
+    "test:sql": "npm run build && node tests/integration/sql-concurrency.cjs",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [],

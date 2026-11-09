@@ -5,7 +5,7 @@ const { ApplicationController } = require("../dist/controller/ApplicationControl
 const { ApplicationDraftController } = require("../dist/controller/ApplicationDraftController");
 const { VenueController } = require("../dist/controller/VenueController");
 
-const event = { eventName: "Sample event", guests: 10, date: "2026-11-20", time: "12:00", duration: 2 };
+const event = { eventName: "Sample event", guests: 10, date: "2099-11-20", time: "12:00", duration: 2 };
 const venueBody = { name: "Sample venue", location: "Sample suburb", capacity: 20, price: 100, description: "Sample description", image: "/images/v1.jpg", suitabilities: ["One", "Two"] };
 const request = body => ({ body, params: { id: "1", hirerId: "1" }, authUser: { id: 1, role: "vendor" } });
 
@@ -41,7 +41,8 @@ test("application rankings roll back together; successful response waits for com
   for (const failure of ["ranking", "commit", null]) {
     const state = { applications: [], rankings: [] };
     const response = await exercise(new ApplicationController(), "createApplication", request({ event, venues: [1, 2] }), state, name => ({
-      findOne: async options => name === "User" ? { id: 1 } : { id: options.where.id, capacity: 20 },
+      findOne: async options => name === "Profile" ? { name: "Sample", phoneNumber: "0400000000" } : name === "User" ? { id: 1 } : { id: options.where.id, capacity: 20 },
+      createQueryBuilder: () => ({ where() { return this; }, andWhere() { return this; }, getCount: async () => 0 }),
       create: value => value,
       save: async value => {
         if (name === "Application") { const row = { ...value, id: 1, status: "pending" }; state.applications.push(row); return row; }
@@ -91,14 +92,14 @@ test("missing venue or vendor responds only after the transaction has rolled bac
 });
 
 test("approval rolls back the conditional decision if its comment cannot be saved", async () => {
-  const state = { application: { id: 1, status: "pending" } };
-  const query = { innerJoin() { return this; }, where() { return this; }, andWhere() { return this; }, getCount: async () => 1 };
+  const state = { application: { id: 1, status: "pending", eventDate: "2026-11-20", eventTime: "12:00", durationHours: 2, guest: 10 } };
+  const query = { innerJoin() { return this; }, where() { return this; }, andWhere() { return this; }, getCount: async () => 0 };
   const response = await exercise(new ApplicationController(), "approveApplication", request({ venueId: 1, commentText: "Sample comment" }), state, name => ({
-    createQueryBuilder: () => query,
+    createQueryBuilder: alias => ({ ...query, getCount: async () => alias === "application" ? 1 : 0 }),
     findOne: async () => name === "Application" ? { ...state.application } : { id: 1, vendor: { id: 1 } },
     update: async (where, value) => { assert.equal(where.status, "pending"); Object.assign(state.application, value); return { affected: 1 }; },
     create: value => value,
     save: async () => { throw new Error("Synthetic comment failure"); },
   }));
-  assert.equal(response.code, 500); assert.deepEqual(state.application, { id: 1, status: "pending" });
+  assert.equal(response.code, 500); assert.deepEqual(state.application, { id: 1, status: "pending", eventDate: "2026-11-20", eventTime: "12:00", durationHours: 2, guest: 10 });
 });

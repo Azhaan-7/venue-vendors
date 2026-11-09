@@ -35,7 +35,7 @@ export function EventForm({ event, setEvent, saveEvent, applyEvent }: EventFormP
                     />
                 </FormControl>
                 <FormControl>
-                    <FormLabel>Date</FormLabel>
+                    <FormLabel>Date (Australia/Sydney)</FormLabel>
                     <Input
                         type="date"
                         value={event.date}
@@ -43,7 +43,7 @@ export function EventForm({ event, setEvent, saveEvent, applyEvent }: EventFormP
                     />
                 </FormControl>
                 <FormControl>
-                    <FormLabel>Time</FormLabel>
+                    <FormLabel>Time (Australia/Sydney)</FormLabel>
                     <Input
                         type="time"
                         value={event.time}

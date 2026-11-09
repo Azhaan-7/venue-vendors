@@ -10,6 +10,7 @@ export type EventApplication = {
     id?: number;
     event: EventDetails;
     venues: number[];
+    venueDetails?: { id: number; name: string; location: string }[];
     dateApplied: string;
     hirerID: number;
     hirerEmail: string;

@@ -23,6 +23,7 @@ import { BlockedPeriod } from "@/types/blockedPeriod";
 import { validateProfile } from "@/types/profileValidation";
 //adding application api, changing applications stored in local storage to instead use api and database
 import { applicationApi, authApi, getCollection, applicationDraftApi } from "@/services/api";
+import { isFutureVenueEvent } from "@/utils/venueTime";
 import { requestError } from "@/utils/requestError";
 import { useRouter } from "next/router";
 export default function Hiring() {
@@ -237,10 +238,7 @@ export default function Hiring() {
             newErrors.push("Time is required");
         }
         if (event.date !== "" && event.time !== "") {
-            const now = new Date();
-            const eventDateTime = new Date(`${event.date}T${event.time}`);
-
-            if (eventDateTime < now) {
+            if (!isFutureVenueEvent(event.date, event.time)) {
                 newErrors.push("Event date and time cannot be in the past");
             }
         }

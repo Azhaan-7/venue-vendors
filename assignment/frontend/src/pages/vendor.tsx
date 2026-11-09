@@ -225,11 +225,11 @@ export default function Vendor() {
   };
 
   const getVenueName = (venueId: number): string => {
-    return venues.find(v => v.id === venueId)?.name || "Unknown";
+    return venues.find(v => v.id === venueId)?.name || applications.flatMap(app => app.venueDetails || []).find(venue => venue.id === venueId)?.name || "Unknown";
   }
 
   const getVenueLocation = (venueId: number): string => {
-    return venues.find(v => v.id === venueId)?.location || "Unknown";
+    return venues.find(v => v.id === venueId)?.location || applications.flatMap(app => app.venueDetails || []).find(venue => venue.id === venueId)?.location || "Unknown";
   }
 
   const getHireHistory = (hirerId: number): HireHistory[] => {
@@ -420,6 +420,10 @@ export default function Vendor() {
     //vendor must select a venue 
     if(!selectedVenueId) {
       setErrorMessage("Select a venue to approve.");
+      return;
+    }
+    if (!venues.some(venue => venue.id === selectedVenueId) || isVenueBlocked(selectedVenueId, selectedApplication.event.date)) {
+      setErrorMessage("Choose an available venue that you own.");
       return;
     }
     try {
@@ -998,7 +1002,7 @@ export default function Vendor() {
         modalMessage={modalMessage} errorMessage={errorMessage} selectedVenueId={selectedVenueId} setSelectedVenueId={setSelectedVenueId}
         handleEditComment={handleEditComment} handleCancelEdit={handleCancelEdit} handleActOnApplication={handleActOnApplication}
         saveComment={saveComment} approve={approve} reject={reject} getStatusColor={getStatusColor}
-        getHirerProfile={getHirerProfile} getVenueName={getVenueName} getVenueLocation={getVenueLocation}
+        canApproveVenue={id => venues.some(venue => venue.id === id)} getHirerProfile={getHirerProfile} getVenueName={getVenueName} getVenueLocation={getVenueLocation}
         getReputation={getReputation} isVenueBlocked={isVenueBlocked} getBlockReason={getBlockReason}
         getHireHistory={getHireHistory} getHistorySummary={getHistorySummary}/>
     </>

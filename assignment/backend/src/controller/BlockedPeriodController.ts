@@ -1,3 +1,5 @@
+import { HttpError } from "../utils/HttpError";
+import { assertNoApprovedBooking } from "../security/booking";
 import { pagination, positiveId, validDate } from "../security/input";
 import { UserRole } from "../entity/UserRole";
 import { Request, Response } from "express";
@@ -32,27 +34,26 @@ export class BlockedPeriodController {
             typeof reason !== "string" || !reason.trim() || reason.length > 255) {
             return response.status(400).json({ message: "A valid venue ID, date range and reason (1 to 255 characters) are required" });
         }
-        const vendorId = request.authUser!.id;
-        const vendorVenues = await this.venueRepository.findOne({ where: { id: venueId }, relations: ["vendor"] });
-        if (!vendorVenues) return response.status(404).json({ message: "Venue not found" });
-        if (vendorVenues.vendor?.id !== vendorId) {
-            return response.status(403).json({ message: "You can only block periods for your own venues" });
-        }
-        if (new Date(startDate) > new Date(endDate)) {
-            return response.status(400).json({
-                message: "Start date cannot be after end date"
+        if (startDate > endDate) return response.status(400).json({ message: "Start date cannot be after end date" });
+        try {
+            const blockedPeriod = await AppDataSource.transaction(async manager => {
+                const venue = await manager.getRepository(Venue).findOne({
+                    where: { id: Number(venueId) }, relations: ["vendor"], lock: { mode: "pessimistic_write" },
+                });
+                if (!venue) throw new HttpError(404, "Venue not found");
+                if (venue.vendor?.id !== request.authUser!.id) throw new HttpError(403, "You can only block periods for your own venues");
+                const start = new Date(`${startDate}T00:00:00Z`);
+                const end = new Date(`${endDate}T00:00:00Z`);
+                end.setUTCDate(end.getUTCDate() + 1);
+                await assertNoApprovedBooking(manager, venue.id, start, end);
+                const repository = manager.getRepository(BlockedPeriod);
+                return repository.save(repository.create({ venue, startDate, endDate, reason: reason.trim() }));
             });
+            return response.status(201).json({ blockedPeriod, message: "Blocked period created successfully" });
+        } catch (error) {
+            if (error instanceof HttpError) return response.status(error.status).json({ message: error.message });
+            return response.status(500).json({ message: "Failed to create blocked period" });
         }
-        if (!venueId || !startDate || !endDate || !reason || reason.trim() === "") {
-            return response.status(400).json({ message: "All fields are required" });
-        }
-        const venue = await this.venueRepository.findOne({ where: { id: venueId } });
-        if (!venue) {
-            return response.status(404).json({ message: "Venue not found for the given vendor ID" });
-        }   
-        const blockedPeriod = this.blockedPeriodRepository.create({ venue, startDate, endDate, reason });
-        await this.blockedPeriodRepository.save(blockedPeriod);
-        return response.status(201).json({ blockedPeriod, message: "Blocked period created successfully" });
     }
 
     async remove(request: Request, response: Response) {
