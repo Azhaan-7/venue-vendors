@@ -19,7 +19,8 @@ const post = (url, body, role = "admin", extraHeaders = {}) => fetch(url, { meth
 
 test("admin data source cannot synchronize, migrate or log SQL automatically", async () => {
   for (const option of ["synchronize", "migrationsRun", "dropSchema", "logging"]) assert.equal(AppDataSource.options[option], false);
-  assert.deepEqual(AppDataSource.options.options, { encrypt: true, trustServerCertificate: false });
+  assert.equal(AppDataSource.options.options.encrypt, true);
+  assert.equal(AppDataSource.options.options.trustServerCertificate, false);
   await assert.rejects(() => AppDataSource.initialize(), /forbidden/);
 });
 

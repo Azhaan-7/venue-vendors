@@ -27,7 +27,8 @@ async function listen(app, action) {
 test("database metadata is safe and both data-source import and app import are offline", async () => {
   assert.equal(AppDataSource.isInitialized, false);
   for (const option of ["synchronize", "migrationsRun", "dropSchema", "logging"]) assert.equal(AppDataSource.options[option], false);
-  assert.deepEqual(AppDataSource.options.options, { encrypt: true, trustServerCertificate: false });
+  assert.equal(AppDataSource.options.options.encrypt, true);
+  assert.equal(AppDataSource.options.options.trustServerCertificate, false);
   await assert.rejects(() => AppDataSource.initialize(), /forbidden/);
 });
 

@@ -1,4 +1,5 @@
 import "reflect-metadata";
+import { databaseInitializationError } from "./utils/databaseStartup";
 import { AppDataSource } from "./data-source";
 import { createApp } from "./app";
 import { positiveInteger, validateStartupEnvironment } from "./config";
@@ -7,9 +8,9 @@ export async function startServer() {
   validateStartupEnvironment();
   const { app, server } = await createApp();
   try { await AppDataSource.initialize(); }
-  catch {
+  catch (error) {
     await server.stop();
-    throw new Error("Database initialization failed. Check connectivity, TLS, firewall and credentials; details suppressed.");
+    throw databaseInitializationError(error);
   }
   const listener = app.listen(positiveInteger("PORT", 3003, 65535), "0.0.0.0");
   listener.on("error", () => { console.error("HTTP listener failed"); process.exitCode = 1; });
