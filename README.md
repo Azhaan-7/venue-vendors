@@ -101,6 +101,8 @@ This is a portfolio demonstration, not a production booking service. Use synthet
 
 ## Deployment
 
+Automatic Git deployments are disabled by the Vercel configuration files. Enable them deliberately when the project is ready to deploy; pushing code alone is intended to leave the hosted frontends unchanged.
+
 The frontends support Vercel hosting, with the REST and GraphQL APIs hosted separately on Render and connected to Azure SQL. Configure backend origins and secrets in the hosting environment. Hosting an instance also requires a compatible database schema, appropriate database permissions and end-to-end verification; the local test suites do not establish production readiness.
 
 ## Acknowledgments
