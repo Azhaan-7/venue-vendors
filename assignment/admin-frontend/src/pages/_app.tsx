@@ -8,6 +8,7 @@ import Header from "@/components/Header";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { AuthProvider } from "@/context/AuthContext";
+import BackendWakeup from "@/components/BackendWakeup";
 
 
 const client = new ApolloClient({
@@ -22,6 +23,7 @@ export default function App({ Component, pageProps }: AppProps) {
   return (
     <ChakraProvider theme={theme}>
       <AuthProvider>
+        <BackendWakeup />
         <ApolloProvider client={client}>
           <Box minH="100vh" display="flex" flexDirection="column">
             <a className="skip-link" href="#main-content">Skip to content</a>
