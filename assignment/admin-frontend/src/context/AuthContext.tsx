@@ -5,6 +5,7 @@ import {
   useContext,
   useEffect,
   useState,
+  useRef,
   type ReactNode,
 } from "react";
 import { authApi, type SignedUser } from "@/services/api";
@@ -26,14 +27,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<SignedUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  const sessionVersion = useRef(0);
+
   useEffect(() => {
+    const version = sessionVersion.current;
+    let active = true;
     authApi.me()
-      .then((currentUser) => setUser(currentUser.role === "admin" ? currentUser : null))
-      .catch(() => setUser(null))
-      .finally(() => setIsLoading(false));
+      .then(currentUser => { if (active && version === sessionVersion.current) setUser(currentUser.role === "admin" ? currentUser : null); })
+      .catch(() => { if (active && version === sessionVersion.current) setUser(null); })
+      .finally(() => { if (active && version === sessionVersion.current) setIsLoading(false); });
+    return () => { active = false; };
   }, []);
 
   const signIn = async (email: string, password: string): Promise<SignInResult> => {
+    sessionVersion.current++;
+    setIsLoading(false);
     try {
       const signedUser = await authApi.signIn({ email, password });
 
@@ -54,6 +62,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
+    sessionVersion.current++;
+    setIsLoading(false);
     await authApi.signOut();
     setUser(null);
   };

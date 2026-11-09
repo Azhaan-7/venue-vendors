@@ -1,5 +1,5 @@
 import axios from "axios";
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useRef, useState } from "react";
 import { authApi } from "@/services/api";
 
 export interface SignedUser {
@@ -22,14 +22,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<SignedUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  const sessionVersion = useRef(0);
+
   useEffect(() => {
+    const version = sessionVersion.current;
+    let active = true;
     authApi.me()
-      .then(setUser)
-      .catch(() => setUser(null))
-      .finally(() => setIsLoading(false));
+      .then(currentUser => { if (active && version === sessionVersion.current) setUser(currentUser); })
+      .catch(() => { if (active && version === sessionVersion.current) setUser(null); })
+      .finally(() => { if (active && version === sessionVersion.current) setIsLoading(false); });
+    return () => { active = false; };
   }, []);
 
   const signIn = async(email: string, password: string): Promise<SignedUser | null> => {
+    sessionVersion.current++;
+    setIsLoading(false);
     try {
       const data = await authApi.signIn({ email, password });
       const signedUser: SignedUser = { id: data.id, email: data.email, role: data.role, name: data.name };
@@ -42,6 +49,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
+    sessionVersion.current++;
+    setIsLoading(false);
     await authApi.signOut();
     setUser(null);
   };
