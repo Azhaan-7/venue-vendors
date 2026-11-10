@@ -11,6 +11,28 @@ We originally built this for our Full Stack Development course at RMIT. It has s
 
 Use sample accounts and documents when trying the app. Please don't upload real identity documents. The backends may take a while to wake up on the first visit.
 
+## Demo accounts
+
+These logins are public and only for trying the demo. Use the [main frontend](https://venue-vendors-xu32.vercel.app/signin) to sign in.
+
+| Role | Email | Password |
+| --- | --- | --- |
+| Hirer | `hirer.demo@example.com` | `HirerDemo!2026` |
+| Hirer | `hirer.events@example.com` | `EventsDemo!2026` |
+| Vendor | `vendor.demo@example.com` | `VendorDemo!2026` |
+| Vendor | `vendor.spaces@example.com` | `SpacesDemo!2026` |
+
+The two vendors each manage four fictional venues, with different locations, capacities, prices and event types. Names, descriptions and prices are sample data, and the existing venue photos are illustrative. Visitors share these accounts, so please use sample information only. Admin credentials are kept private because admin access can change all venues and reports.
+
+To add the demo data to a configured database, run these commands in `assignment/backend`:
+
+```bash
+npm run seed:demo             # Preview what would be added
+npm run seed:demo -- --apply  # Add the demo users and venues
+```
+
+The seed uses the backend's database environment variables. It runs in a transaction, skips existing matching demo records and never resets existing passwords or replaces venues. It stops if a demo email or venue belongs to a different account. It does not run automatically at startup or change the database schema.
+
 ## Features
 
 - **Hirers:** Search and compare venues, rank preferences, manage profiles and documents, save event drafts, submit applications and view application and hiring history.
