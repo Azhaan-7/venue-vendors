@@ -31,6 +31,17 @@ npm run seed:demo             # Preview what would be added
 npm run seed:demo -- --apply  # Add the demo users and venues
 ```
 
+Each demo hirer also has four sample applications: one pending, one rejected, one upcoming approved booking and one past approved booking with a five-star sample hiring-history entry. Both vendors have applicants to review and confirmed bookings for their charts. These are fictional examples, not real customer activity.
+
+After seeding users and venues, add this activity with:
+
+```bash
+npm run seed:demo-activity             # Preview sample activity
+npm run seed:demo-activity -- --apply  # Add applications and bookings
+```
+
+Activity dates are based on Sydney time when first seeded. Reruns preserve existing applications and visitor decisions; they do not refresh old dates. Confirmed bookings respect existing venue availability, and historical bookings have no uploaded documents.
+
 The seed uses the backend's database environment variables. It runs in a transaction, skips existing matching demo records and never resets existing passwords or replaces venues. It stops if a demo email or venue belongs to a different account. It does not run automatically at startup or change the database schema.
 
 ## Features
